@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Send,
   Server,
+  Settings,
   ShieldCheck,
   TerminalSquare,
   Unplug,
@@ -21,6 +22,7 @@ import {
 import { hostsApi, type Host } from "@/api/hosts"
 import { agentApi, type AgentTask } from "@/api/agent"
 import { Button } from "@/components/ui/button"
+import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { navigate } from "@/router/navigation"
 
 type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
@@ -35,6 +37,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
   const [status, setStatus] = useState<ConnectionStatus>("idle")
   const [error, setError] = useState("")
   const [agentOpen, setAgentOpen] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     hostsApi
@@ -195,6 +198,15 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           >
             {agentOpen ? <PanelRightClose /> : <PanelRightOpen />}
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-slate-400 hover:bg-white/10 hover:text-white"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="AI 设置"
+          >
+            <Settings />
+          </Button>
         </div>
       </header>
       {error && (
@@ -243,6 +255,9 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           <AgentPanel hostId={hostId} connected={status === "connected"} />
         )}
       </div>
+      {settingsOpen && (
+        <AISettingsDialog onClose={() => setSettingsOpen(false)} />
+      )}
     </div>
   )
 }
@@ -282,6 +297,14 @@ function AgentPanel({
   const [tasks, setTasks] = useState<AgentTask[]>([])
   const [working, setWorking] = useState(false)
   const [error, setError] = useState("")
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  useEffect(() => {
+    agentApi
+      .listTasks(hostId)
+      .then(setTasks)
+      .catch((reason: Error) => setError(reason.message))
+      .finally(() => setLoadingHistory(false))
+  }, [hostId])
   async function submit() {
     if (!question.trim() || working) return
     setWorking(true)
@@ -310,6 +333,20 @@ function AgentPanel({
       setWorking(false)
     }
   }
+  async function reject(taskId: number) {
+    setWorking(true)
+    setError("")
+    try {
+      const task = await agentApi.reject(taskId)
+      setTasks((items) =>
+        items.map((item) => (item.id === task.id ? task : item))
+      )
+    } catch (reason) {
+      setError((reason as Error).message)
+    } finally {
+      setWorking(false)
+    }
+  }
   return (
     <aside className="flex w-[380px] shrink-0 flex-col border-l border-white/10 bg-[#11151d]">
       <div className="flex h-9 items-center gap-2 border-b border-white/[0.07] px-3 text-xs font-medium">
@@ -317,7 +354,11 @@ function AgentPanel({
         运维 Agent
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {tasks.length === 0 ? (
+        {loadingHistory ? (
+          <div className="grid h-full place-items-center">
+            <RefreshCw className="size-4 animate-spin text-slate-600" />
+          </div>
+        ) : tasks.length === 0 ? (
           <div className="flex h-full items-center justify-center p-6 text-center">
             <div>
               <div className="mx-auto grid size-11 place-items-center rounded-xl bg-violet-500/10">
@@ -367,14 +408,30 @@ function AgentPanel({
                         </pre>
                       )}
                       {command.status === "pending_approval" && (
-                        <Button
-                          size="sm"
-                          className="mt-3 bg-amber-500 text-black hover:bg-amber-400"
-                          onClick={() => void approve(task.id)}
-                          disabled={working}
-                        >
-                          确认执行
-                        </Button>
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-amber-500 text-black hover:bg-amber-400"
+                            onClick={() => void approve(task.id)}
+                            disabled={working}
+                          >
+                            确认执行
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-white/10 bg-transparent text-slate-300 hover:bg-white/10"
+                            onClick={() => void reject(task.id)}
+                            disabled={working}
+                          >
+                            拒绝
+                          </Button>
+                        </div>
+                      )}
+                      {command.status === "rejected" && (
+                        <div className="mt-2 text-[11px] text-slate-500">
+                          已拒绝执行
+                        </div>
                       )}
                     </div>
                   ))}

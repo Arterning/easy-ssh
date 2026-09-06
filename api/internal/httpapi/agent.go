@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	gossh "golang.org/x/crypto/ssh"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -28,6 +29,26 @@ type agentPlan struct {
 }
 type agentRequest struct {
 	Question string `json:"question"`
+}
+
+func (a *API) listAgentTasks(w http.ResponseWriter, r *http.Request) {
+	hostID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		failMessage(w, 400, "invalid host id")
+		return
+	}
+	var tasks []model.AgentTask
+	if err = a.db.Where("host_id = ?", uint(hostID)).Order("created_at asc").Limit(100).Find(&tasks).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	result := make([]map[string]any, 0, len(tasks))
+	for _, task := range tasks {
+		var commands []agentCommand
+		_ = json.Unmarshal([]byte(task.CommandsJSON), &commands)
+		result = append(result, taskResponse(task, commands))
+	}
+	writeJSON(w, 200, result)
 }
 
 var changePattern = regexp.MustCompile(`(?i)(^|[;&|]\s*)(rm|mv|cp|sed\s+-i|tee|truncate|chmod|chown|systemctl\s+(start|stop|restart|enable|disable)|service\s+\S+\s+(start|stop|restart)|apt|yum|dnf|apk|reboot|shutdown|kill|pkill|useradd|userdel|passwd|mount|umount|iptables|nft)\b|>|>>`)
@@ -52,8 +73,17 @@ func (a *API) createAgentTask(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, err)
 		return
 	}
+	if len(plan.Commands) > 8 {
+		failMessage(w, 422, "模型生成的命令过多，请缩小任务范围")
+		return
+	}
 	for i := range plan.Commands {
 		cmd := &plan.Commands[i]
+		cmd.Command = strings.TrimSpace(cmd.Command)
+		if cmd.Command == "" || len(cmd.Command) > 4000 {
+			failMessage(w, 422, "模型生成了无效命令")
+			return
+		}
 		if changePattern.MatchString(cmd.Command) {
 			cmd.Risk = "change"
 			cmd.Status = "pending_approval"
@@ -120,6 +150,37 @@ func (a *API) approveAgentTask(w http.ResponseWriter, r *http.Request) {
 	a.db.Save(&task)
 	writeJSON(w, 200, taskResponse(task, commands))
 }
+
+func (a *API) rejectAgentTask(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		failMessage(w, 400, "invalid task id")
+		return
+	}
+	var task model.AgentTask
+	if err = a.db.First(&task, uint(id)).Error; err != nil {
+		failMessage(w, 404, "task not found")
+		return
+	}
+	var commands []agentCommand
+	if err = json.Unmarshal([]byte(task.CommandsJSON), &commands); err != nil {
+		fail(w, 500, err)
+		return
+	}
+	for i := range commands {
+		if commands[i].Status == "pending_approval" {
+			commands[i].Status = "rejected"
+		}
+	}
+	raw, _ := json.Marshal(commands)
+	task.CommandsJSON = string(raw)
+	task.Status = "rejected"
+	if err = a.db.Save(&task).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	writeJSON(w, 200, taskResponse(task, commands))
+}
 func (a *API) requestPlan(ctx context.Context, host model.Host, question string) (agentPlan, error) {
 	var settings model.AISettings
 	if err := a.db.First(&settings).Error; err != nil {
@@ -129,7 +190,7 @@ func (a *API) requestPlan(ctx context.Context, host model.Host, question string)
 	if err != nil || key == "" {
 		return agentPlan{}, fmt.Errorf("请先配置 API Key")
 	}
-	prompt := fmt.Sprintf("你是 Linux 运维助手。目标主机名称=%s，地址=%s。根据用户任务生成最少且安全的 shell 命令。只返回 JSON，不要 markdown，格式：{\"summary\":\"计划摘要\",\"commands\":[{\"command\":\"命令\",\"description\":\"用途\"}]}。禁止交互命令。用户任务：%s", host.Name, host.Address, question)
+	prompt := fmt.Sprintf("你是 Linux 运维助手。目标主机名称=%s，地址=%s。根据用户任务生成最多 5 条、最少且安全的 shell 命令。只返回 JSON，不要 markdown，格式：{\"summary\":\"计划摘要\",\"commands\":[{\"command\":\"命令\",\"description\":\"用途\"}]}。禁止交互命令，禁止使用 sudo，禁止把多个变更操作拼成一条命令。用户任务：%s", host.Name, host.Address, question)
 	payload := map[string]any{"model": settings.Model, "temperature": 0.1, "messages": []map[string]string{{"role": "user", "content": prompt}}}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(settings.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
@@ -184,7 +245,7 @@ func (a *API) runCommand(ctx context.Context, host model.Host, command string) (
 	if err != nil {
 		return err.Error(), -1
 	}
-	client, err := gossh.Dial("tcp", netJoin(host.Address, host.Port), &gossh.ClientConfig{User: host.Username, Auth: []gossh.AuthMethod{auth}, HostKeyCallback: gossh.InsecureIgnoreHostKey(), Timeout: 10 * time.Second})
+	client, err := gossh.Dial("tcp", net.JoinHostPort(host.Address, strconv.Itoa(host.Port)), &gossh.ClientConfig{User: host.Username, Auth: []gossh.AuthMethod{auth}, HostKeyCallback: gossh.InsecureIgnoreHostKey(), Timeout: 10 * time.Second})
 	if err != nil {
 		return err.Error(), -1
 	}
@@ -200,12 +261,12 @@ func (a *API) runCommand(ctx context.Context, host model.Host, command string) (
 	select {
 	case <-done:
 		if err == nil {
-			return string(output), 0
+			return limitOutput(string(output)), 0
 		}
 		if exit, ok := err.(*gossh.ExitError); ok {
-			return string(output), exit.ExitStatus()
+			return limitOutput(string(output)), exit.ExitStatus()
 		}
-		return string(output) + "\n" + err.Error(), -1
+		return limitOutput(string(output) + "\n" + err.Error()), -1
 	case <-ctx.Done():
 		_ = session.Close()
 		return "命令执行被取消", -1
@@ -217,6 +278,10 @@ func (a *API) runCommand(ctx context.Context, host model.Host, command string) (
 func taskResponse(task model.AgentTask, commands []agentCommand) map[string]any {
 	return map[string]any{"id": task.ID, "hostId": task.HostID, "question": task.Question, "summary": task.Summary, "status": task.Status, "commands": commands, "createdAt": task.CreatedAt}
 }
-func netJoin(address string, port int) string {
-	return strings.TrimSpace(address) + ":" + strconv.Itoa(port)
+func limitOutput(output string) string {
+	const max = 128 * 1024
+	if len(output) <= max {
+		return output
+	}
+	return output[:max] + "\n... 输出已截断"
 }

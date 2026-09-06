@@ -6,7 +6,11 @@ const WorkspacePage = lazy(() => import("@/pages/workspace"))
 const routes = { "/": HostsPage, "/hosts": HostsPage }
 
 function PendingPage() {
-  return <main className="grid min-h-svh place-items-center text-sm text-muted-foreground">加载中...</main>
+  return (
+    <main className="grid min-h-svh place-items-center text-sm text-muted-foreground">
+      加载中...
+    </main>
+  )
 }
 
 export function AppRouter() {
@@ -17,9 +21,19 @@ export function AppRouter() {
     return () => window.removeEventListener("popstate", handleNavigation)
   }, [])
   const Page = routes[path as keyof typeof routes]
-  if (Page) return <Suspense fallback={<PendingPage />}><Page /></Suspense>
+  if (Page)
+    return (
+      <Suspense fallback={<PendingPage />}>
+        <Page />
+      </Suspense>
+    )
   const workspaceMatch = path.match(/^\/workspace\/(\d+)$/)
-  if (workspaceMatch) return <Suspense fallback={<PendingPage />}><WorkspacePage hostId={Number(workspaceMatch[1])} /></Suspense>
+  if (workspaceMatch)
+    return (
+      <Suspense fallback={<PendingPage />}>
+        <WorkspacePage hostId={Number(workspaceMatch[1])} />
+      </Suspense>
+    )
   return (
     <main className="grid min-h-svh place-items-center text-center">
       <div>

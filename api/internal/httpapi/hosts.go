@@ -64,7 +64,9 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/settings/ai", a.getSettings)
 	mux.HandleFunc("PUT /api/v1/settings/ai", a.saveSettings)
 	mux.HandleFunc("POST /api/v1/hosts/{id}/agent/tasks", a.createAgentTask)
+	mux.HandleFunc("GET /api/v1/hosts/{id}/agent/tasks", a.listAgentTasks)
 	mux.HandleFunc("POST /api/v1/agent/tasks/{id}/approve", a.approveAgentTask)
+	mux.HandleFunc("POST /api/v1/agent/tasks/{id}/reject", a.rejectAgentTask)
 	return cors(mux)
 }
 func (a *API) listHosts(w http.ResponseWriter, _ *http.Request) {
