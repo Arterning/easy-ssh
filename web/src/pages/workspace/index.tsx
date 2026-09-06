@@ -21,13 +21,12 @@ import {
 
 import { hostsApi, type Host } from "@/api/hosts"
 import { agentApi, type AgentTask } from "@/api/agent"
+import { API_BASE } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { navigate } from "@/router/navigation"
 
 type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
-const apiBase =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1"
 
 export function WorkspacePage({ hostId }: { hostId: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -103,7 +102,10 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
     const terminal = terminalRef.current
     terminal?.clear()
     terminal?.writeln("\x1b[90m正在建立安全连接...\x1b[0m")
-    const url = new URL(`${apiBase}/hosts/${host.id}/terminal`)
+    const url = new URL(
+      `${API_BASE}/hosts/${host.id}/terminal`,
+      window.location.origin
+    )
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
     const socket = new WebSocket(url)
     socket.binaryType = "arraybuffer"

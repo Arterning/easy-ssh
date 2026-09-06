@@ -6,6 +6,7 @@ import (
 	"easyssh/api/internal/database"
 	"easyssh/api/internal/httpapi"
 	"easyssh/api/internal/model"
+	"easyssh/api/internal/webui"
 	"log"
 	"net/http"
 	"time"
@@ -24,7 +25,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := &http.Server{Addr: cfg.Address, Handler: httpapi.New(db, vault).Handler(), ReadHeaderTimeout: 10 * time.Second}
-	log.Printf("EasySSH API listening on %s (%s)", cfg.Address, cfg.DatabaseDriver)
+	router := http.NewServeMux()
+	router.Handle("/api/", httpapi.New(db, vault).Handler())
+	router.Handle("/", webui.Handler())
+	server := &http.Server{Addr: cfg.Address, Handler: router, ReadHeaderTimeout: 10 * time.Second}
+	log.Printf("EasySSH listening on http://localhost%s (%s)", cfg.Address, cfg.DatabaseDriver)
 	log.Fatal(server.ListenAndServe())
 }
