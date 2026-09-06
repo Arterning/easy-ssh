@@ -36,6 +36,8 @@ import {
   type HostInput,
   type HostStatus,
 } from "@/api/hosts"
+import { navigate } from "@/router/navigation"
+import { settingsApi } from "@/api/settings"
 
 type HostDraft = HostInput & { password: string; privateKey: string }
 const emptyDraft: HostDraft = {
@@ -347,6 +349,7 @@ export function HostsPage() {
                           setMenuId(menuId === host.id ? null : host.id)
                         }
                         onEdit={() => openEdit(host)}
+                        onConnect={() => navigate(`/workspace/${host.id}`)}
                         onDelete={() => void deleteHost(host.id)}
                       />
                     ))}
@@ -360,6 +363,7 @@ export function HostsPage() {
                     key={host.id}
                     host={host}
                     onEdit={() => openEdit(host)}
+                    onConnect={() => navigate(`/workspace/${host.id}`)}
                   />
                 ))}
               </div>
@@ -476,12 +480,14 @@ function HostRow({
   menuOpen,
   onMenu,
   onEdit,
+  onConnect,
   onDelete,
 }: {
   host: Host
   menuOpen: boolean
   onMenu: () => void
   onEdit: () => void
+  onConnect: () => void
   onDelete: () => void
 }) {
   return (
@@ -531,7 +537,7 @@ function HostRow({
       </td>
       <td className="relative px-5 py-4">
         <div className="flex justify-end gap-1">
-          <Button size="sm">
+          <Button size="sm" onClick={onConnect}>
             <TerminalSquare />
             连接
           </Button>
@@ -561,7 +567,15 @@ function HostRow({
     </tr>
   )
 }
-function HostCard({ host, onEdit }: { host: Host; onEdit: () => void }) {
+function HostCard({
+  host,
+  onEdit,
+  onConnect,
+}: {
+  host: Host
+  onEdit: () => void
+  onConnect: () => void
+}) {
   return (
     <div className="rounded-xl border bg-background p-4 transition hover:border-foreground/20 hover:shadow-sm">
       <div className="flex items-start justify-between">
@@ -585,7 +599,7 @@ function HostCard({ host, onEdit }: { host: Host; onEdit: () => void }) {
         ))}
       </div>
       <div className="mt-5 flex gap-2 border-t pt-3">
-        <Button className="flex-1" size="sm">
+        <Button className="flex-1" size="sm" onClick={onConnect}>
           <TerminalSquare />
           连接
         </Button>
@@ -843,7 +857,34 @@ function AiSettings({ onClose }: { onClose: () => void }) {
   const [provider, setProvider] = useState("OpenAI")
   const [baseUrl, setBaseUrl] = useState("https://api.openai.com/v1")
   const [model, setModel] = useState("gpt-5-mini")
+  const [apiKey, setApiKey] = useState("")
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    settingsApi
+      .getAI()
+      .then((settings) => {
+        setProvider(settings.provider || "OpenAI")
+        setBaseUrl(settings.baseUrl || "https://api.openai.com/v1")
+        setModel(settings.model || "")
+      })
+      .catch(() => undefined)
+  }, [])
+  async function save() {
+    setSaving(true)
+    try {
+      await settingsApi.saveAI({
+        provider,
+        baseUrl,
+        model,
+        apiKey: apiKey || undefined,
+      })
+      setApiKey("")
+      setSaved(true)
+    } finally {
+      setSaving(false)
+    }
+  }
   return (
     <ModalShell
       wide
@@ -892,7 +933,9 @@ function AiSettings({ onClose }: { onClose: () => void }) {
                 <input
                   type={showKey ? "text" : "password"}
                   className={`${inputClass} pr-10`}
-                  defaultValue="sk-easyssh-demo-key"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder="留空则保持已保存的密钥"
                 />
                 <button
                   onClick={() => setShowKey(!showKey)}
@@ -937,11 +980,12 @@ function AiSettings({ onClose }: { onClose: () => void }) {
               已保存
             </span>
           )}
-          <Button variant="outline">
-            <Zap />
-            测试连接
+          <Button
+            onClick={() => void save()}
+            disabled={saving || !baseUrl || !model}
+          >
+            {saving ? <LoaderCircle className="animate-spin" /> : null}保存设置
           </Button>
-          <Button onClick={() => setSaved(true)}>保存设置</Button>
         </div>
       </div>
     </ModalShell>

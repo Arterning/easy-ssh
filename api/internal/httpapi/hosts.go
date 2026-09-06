@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -61,6 +60,11 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/hosts/{id}", a.deleteHost)
 	mux.HandleFunc("POST /api/v1/hosts/{id}/test", a.testSavedHost)
 	mux.HandleFunc("POST /api/v1/hosts/test", a.testInput)
+	mux.HandleFunc("GET /api/v1/hosts/{id}/terminal", a.terminal)
+	mux.HandleFunc("GET /api/v1/settings/ai", a.getSettings)
+	mux.HandleFunc("PUT /api/v1/settings/ai", a.saveSettings)
+	mux.HandleFunc("POST /api/v1/hosts/{id}/agent/tasks", a.createAgentTask)
+	mux.HandleFunc("POST /api/v1/agent/tasks/{id}/approve", a.approveAgentTask)
 	return cors(mux)
 }
 func (a *API) listHosts(w http.ResponseWriter, _ *http.Request) {
@@ -197,26 +201,9 @@ func (a *API) fromInput(in hostInput, old *model.Host) (model.Host, error) {
 	return h, err
 }
 func (a *API) sshTest(h model.Host) error {
-	var auth gossh.AuthMethod
-	if h.AuthType == "key" {
-		value, err := a.vault.Decrypt(h.PrivateKeyEncrypted)
-		if err != nil {
-			return err
-		}
-		signer, err := gossh.ParsePrivateKey([]byte(value))
-		if err != nil {
-			return fmt.Errorf("invalid private key: %w", err)
-		}
-		auth = gossh.PublicKeys(signer)
-	} else {
-		value, err := a.vault.Decrypt(h.PasswordEncrypted)
-		if err != nil {
-			return err
-		}
-		if value == "" {
-			return fmt.Errorf("password is not configured")
-		}
-		auth = gossh.Password(value)
+	auth, err := a.sshAuth(h)
+	if err != nil {
+		return err
 	}
 	client, err := gossh.Dial("tcp", net.JoinHostPort(h.Address, strconv.Itoa(h.Port)), &gossh.ClientConfig{User: h.Username, Auth: []gossh.AuthMethod{auth}, HostKeyCallback: gossh.InsecureIgnoreHostKey(), Timeout: 8 * time.Second})
 	if err != nil {
@@ -272,7 +259,11 @@ func failMessage(w http.ResponseWriter, status int, message string) {
 }
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		origin := r.Header.Get("Origin")
+		if origin == "http://localhost:5173" || origin == "http://127.0.0.1:5173" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
 		if r.Method == http.MethodOptions {
