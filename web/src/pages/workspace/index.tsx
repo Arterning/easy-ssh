@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { FitAddon } from "@xterm/addon-fit"
 import { Terminal } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
@@ -32,6 +32,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
+  const autoConnectAttemptedRef = useRef(false)
   const [host, setHost] = useState<Host | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>("idle")
   const [error, setError] = useState("")
@@ -95,7 +96,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
     }
   }, [])
 
-  function connect() {
+  const connect = useCallback(() => {
     if (!host || status === "connecting" || status === "connected") return
     setStatus("connecting")
     setError("")
@@ -137,7 +138,13 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
       socketRef.current = null
       terminal?.writeln("\r\n\x1b[90m连接已关闭\x1b[0m")
     }
-  }
+  }, [host, status])
+
+  useEffect(() => {
+    if (!host || autoConnectAttemptedRef.current) return
+    autoConnectAttemptedRef.current = true
+    connect()
+  }, [connect, host])
   function disconnect() {
     socketRef.current?.close()
     socketRef.current = null

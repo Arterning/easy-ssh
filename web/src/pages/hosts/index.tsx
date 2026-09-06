@@ -36,7 +36,6 @@ import {
   type HostInput,
   type HostStatus,
 } from "@/api/hosts"
-import { navigate } from "@/router/navigation"
 import { settingsApi } from "@/api/settings"
 
 type HostDraft = HostInput & { password: string; privateKey: string }
@@ -55,6 +54,10 @@ const emptyDraft: HostDraft = {
 const inputClass =
   "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-foreground/40 focus:ring-2 focus:ring-ring/20"
 const labelClass = "mb-1.5 block text-sm font-medium"
+
+function openWorkspace(hostId: number) {
+  window.open(`/workspace/${hostId}`, "_blank", "noopener,noreferrer")
+}
 
 export function HostsPage() {
   const { theme, setTheme } = useTheme()
@@ -190,7 +193,6 @@ export function HostsPage() {
         </div>
         <nav className="mt-7 space-y-1 text-sm">
           <NavItem active icon={<Server />} label="主机" count={hosts.length} />
-          <NavItem icon={<TerminalSquare />} label="工作台" />
           <NavItem icon={<Bot />} label="任务记录" />
           <NavItem icon={<FileClock />} label="连接记录" />
         </nav>
@@ -349,7 +351,7 @@ export function HostsPage() {
                           setMenuId(menuId === host.id ? null : host.id)
                         }
                         onEdit={() => openEdit(host)}
-                        onConnect={() => navigate(`/workspace/${host.id}`)}
+                        onConnect={() => openWorkspace(host.id)}
                         onDelete={() => void deleteHost(host.id)}
                       />
                     ))}
@@ -363,7 +365,7 @@ export function HostsPage() {
                     key={host.id}
                     host={host}
                     onEdit={() => openEdit(host)}
-                    onConnect={() => navigate(`/workspace/${host.id}`)}
+                    onConnect={() => openWorkspace(host.id)}
                   />
                 ))}
               </div>
