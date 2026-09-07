@@ -24,6 +24,7 @@ import { agentApi, type AgentTask } from "@/api/agent"
 import { API_BASE } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
+import { Markdown } from "@/components/markdown"
 import { navigate } from "@/router/navigation"
 
 type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
@@ -320,10 +321,25 @@ function AgentPanel({
     setError("")
     const value = question
     setQuestion("")
+    const optimisticId = -Date.now()
+    const optimisticTask: AgentTask = {
+      id: optimisticId,
+      hostId,
+      question: value,
+      summary: "",
+      status: "submitting",
+      commands: [],
+      createdAt: new Date().toISOString(),
+    }
+    setTasks((items) => [...items, optimisticTask])
     try {
       const task = await agentApi.createTask(hostId, value)
-      setTasks((items) => [...items, task])
+      setTasks((items) =>
+        items.map((item) => (item.id === optimisticId ? task : item))
+      )
     } catch (reason) {
+      setTasks((items) => items.filter((item) => item.id !== optimisticId))
+      setQuestion(value)
       setError((reason as Error).message)
     } finally {
       setWorking(false)
@@ -389,9 +405,16 @@ function AgentPanel({
                 <div className="rounded-lg bg-white/[0.05] p-3 text-xs text-slate-300">
                   {task.question}
                 </div>
-                <p className="mt-3 text-xs leading-5 text-slate-400">
-                  {task.summary}
-                </p>
+                {task.status === "submitting" ? (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                    <RefreshCw className="size-3 animate-spin" />
+                    正在发送并生成执行计划…
+                  </div>
+                ) : (
+                  <Markdown className="mt-3 text-xs text-slate-400 [&_code]:bg-white/10 [&_pre]:bg-black/30">
+                    {task.summary}
+                  </Markdown>
+                )}
                 <div className="mt-2 space-y-2">
                   {task.commands.map((command, index) => (
                     <div

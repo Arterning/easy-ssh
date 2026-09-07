@@ -13,7 +13,7 @@ export type AgentTask = {
   hostId: number
   question: string
   summary: string
-  status: "completed" | "waiting_approval" | "rejected"
+  status: "completed" | "waiting_approval" | "rejected" | "submitting"
   commands: AgentCommand[]
   createdAt: string
 }
