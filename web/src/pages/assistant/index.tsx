@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
+  Activity,
   Bot,
   Check,
   Clock,
@@ -158,6 +159,13 @@ export function AssistantPage() {
           >
             <Server className="size-4" />
             主机
+          </button>
+          <button
+            onClick={() => navigate("/services")}
+            className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-muted-foreground hover:bg-sidebar-accent"
+          >
+            <Activity className="size-4" />
+            服务
           </button>
           <button className="flex h-9 w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 font-medium">
             <Bot className="size-4" />

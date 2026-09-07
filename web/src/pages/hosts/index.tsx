@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
+  Activity,
   Bot,
   Check,
   ChevronDown,
@@ -8,7 +9,6 @@ import {
   Ellipsis,
   Eye,
   EyeOff,
-  FileClock,
   KeyRound,
   LaptopMinimal,
   LayoutGrid,
@@ -205,11 +205,15 @@ export function HostsPage() {
             onClick={() => navigate("/hosts")}
           />
           <NavItem
+            icon={<Activity />}
+            label="服务"
+            onClick={() => navigate("/services")}
+          />
+          <NavItem
             icon={<Bot />}
             label="智能助手"
             onClick={() => navigate("/assistant")}
           />
-          <NavItem icon={<FileClock />} label="连接记录" />
         </nav>
         <div className="mt-auto space-y-1">
           <button

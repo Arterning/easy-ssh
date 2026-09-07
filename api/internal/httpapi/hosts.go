@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"easyssh/api/internal/cryptox"
@@ -15,11 +16,15 @@ import (
 )
 
 type API struct {
-	db    *gorm.DB
-	vault *cryptox.Vault
+	db                   *gorm.DB
+	vault                *cryptox.Vault
+	serviceSubscribersMu sync.Mutex
+	serviceSubscribers   map[chan []byte]struct{}
 }
 
-func New(db *gorm.DB, vault *cryptox.Vault) *API { return &API{db, vault} }
+func New(db *gorm.DB, vault *cryptox.Vault) *API {
+	return &API{db: db, vault: vault, serviceSubscribers: make(map[chan []byte]struct{})}
+}
 
 type hostInput struct {
 	Name       string   `json:"name"`
@@ -77,6 +82,13 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/assistant/conversations/{id}/messages", a.sendAssistantMessage)
 	mux.HandleFunc("POST /api/v1/assistant/approvals/{id}/approve", a.approveAssistantCall)
 	mux.HandleFunc("POST /api/v1/assistant/approvals/{id}/reject", a.rejectAssistantCall)
+	mux.HandleFunc("GET /api/v1/services", a.listServices)
+	mux.HandleFunc("POST /api/v1/services", a.createService)
+	mux.HandleFunc("PUT /api/v1/services/{id}", a.updateService)
+	mux.HandleFunc("DELETE /api/v1/services/{id}", a.deleteService)
+	mux.HandleFunc("POST /api/v1/services/{id}/check", a.checkServiceNow)
+	mux.HandleFunc("GET /api/v1/services/{id}/checks", a.listServiceChecks)
+	mux.HandleFunc("GET /api/v1/services/events", a.serviceEvents)
 	return cors(mux)
 }
 func (a *API) listHosts(w http.ResponseWriter, _ *http.Request) {

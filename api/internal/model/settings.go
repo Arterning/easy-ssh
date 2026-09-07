@@ -48,3 +48,39 @@ type AssistantApproval struct {
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
+
+type Service struct {
+	ID                   uint   `gorm:"primaryKey"`
+	Name                 string `gorm:"size:160;not null"`
+	URL                  string `gorm:"size:1000;not null"`
+	Method               string `gorm:"size:10;not null;default:GET"`
+	IntervalSec          int    `gorm:"not null;default:60"`
+	TimeoutSec           int    `gorm:"not null;default:10"`
+	ExpectedStatus       string `gorm:"size:100;not null;default:200-299"`
+	Keyword              string `gorm:"size:500"`
+	FollowRedirects      bool   `gorm:"not null;default:true"`
+	MaxLatencyMS         int64  `gorm:"not null;default:2000"`
+	Enabled              bool   `gorm:"not null;default:true"`
+	GroupName            string `gorm:"size:120"`
+	HostID               *uint  `gorm:"index"`
+	CurrentStatus        string `gorm:"size:30;not null;default:unknown"`
+	LastHTTPStatus       int    `gorm:"not null;default:0"`
+	LastLatencyMS        int64  `gorm:"not null;default:0"`
+	LastError            string `gorm:"type:text"`
+	LastCheckedAt        *time.Time
+	NextCheckAt          *time.Time `gorm:"index"`
+	ConsecutiveSuccesses int        `gorm:"not null;default:0"`
+	ConsecutiveFailures  int        `gorm:"not null;default:0"`
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type ServiceCheck struct {
+	ID         uint   `gorm:"primaryKey"`
+	ServiceID  uint   `gorm:"index;not null"`
+	Status     string `gorm:"size:30;not null"`
+	HTTPStatus int
+	LatencyMS  int64
+	Error      string    `gorm:"type:text"`
+	CheckedAt  time.Time `gorm:"index"`
+}

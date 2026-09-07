@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"easyssh/api/internal/config"
 	"easyssh/api/internal/cryptox"
 	"easyssh/api/internal/database"
@@ -18,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err = db.AutoMigrate(&model.Host{}, &model.TerminalSession{}, &model.AISettings{}, &model.AgentTask{}, &model.AssistantConversation{}, &model.AssistantApproval{}); err != nil {
+	if err = db.AutoMigrate(&model.Host{}, &model.TerminalSession{}, &model.AISettings{}, &model.AgentTask{}, &model.AssistantConversation{}, &model.AssistantApproval{}, &model.Service{}, &model.ServiceCheck{}); err != nil {
 		log.Fatal(err)
 	}
 	vault, err := cryptox.Open(cfg.DataDir)
@@ -26,7 +27,9 @@ func main() {
 		log.Fatal(err)
 	}
 	router := http.NewServeMux()
-	router.Handle("/api/", httpapi.New(db, vault).Handler())
+	api := httpapi.New(db, vault)
+	api.StartServiceMonitor(context.Background())
+	router.Handle("/api/", api.Handler())
 	router.Handle("/", webui.Handler())
 	server := &http.Server{Addr: cfg.Address, Handler: router, ReadHeaderTimeout: 10 * time.Second}
 	log.Printf("EasySSH listening on http://localhost%s (%s)", cfg.Address, cfg.DatabaseDriver)
