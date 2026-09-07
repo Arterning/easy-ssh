@@ -34,9 +34,12 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
   const [dragging, setDragging] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
   const [filter, setFilter] = useState("")
+  const [pathEditing, setPathEditing] = useState(false)
+  const [pathInput, setPathInput] = useState("")
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const requests = useRef(new Map<string, XMLHttpRequest>())
+  const pathInputRef = useRef<HTMLInputElement>(null)
 
   const loadDirectory = useCallback(
     async (target?: string) => {
@@ -56,8 +59,10 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
               a.name.localeCompare(b.name, undefined, { numeric: true })
           )
         )
+        return true
       } catch (reason) {
         setError((reason as Error).message)
+        return false
       } finally {
         setLoading(false)
       }
@@ -90,6 +95,18 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
       entry.name.toLocaleLowerCase().includes(keyword)
     )
   }, [entries, filter])
+
+  function beginPathEditing() {
+    setPathInput(currentPath)
+    setPathEditing(true)
+    requestAnimationFrame(() => pathInputRef.current?.select())
+  }
+
+  async function submitPath() {
+    const target = pathInput.trim()
+    if (!target) return
+    if (await loadDirectory(target)) setPathEditing(false)
+  }
 
   async function uploadFiles(files: FileList | File[]) {
     for (const file of Array.from(files)) await uploadOne(file, false)
@@ -240,22 +257,51 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
         >
           <ChevronLeft className="size-3.5" />
         </button>
-        <div className="flex min-w-0 flex-1 items-center overflow-x-auto text-[10px] text-slate-500">
-          {crumbs.map((crumb, index) => (
-            <span
-              key={`${crumb.path}-${index}`}
-              className="flex shrink-0 items-center"
-            >
-              <button
-                onClick={() => void loadDirectory(crumb.path)}
-                className="max-w-20 truncate rounded px-1 py-0.5 hover:bg-white/10 hover:text-slate-200"
+        {pathEditing ? (
+          <input
+            ref={pathInputRef}
+            value={pathInput}
+            onChange={(event) => setPathInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void submitPath()
+              if (event.key === "Escape") {
+                setPathEditing(false)
+                setPathInput(currentPath)
+              }
+            }}
+            onBlur={() => {
+              if (!loading) setPathEditing(false)
+            }}
+            aria-label="远程目录路径"
+            className="h-6 min-w-0 flex-1 rounded border border-blue-400/50 bg-black/20 px-2 font-mono text-[10px] text-slate-300 outline-none"
+          />
+        ) : (
+          <div
+            title="点击编辑路径"
+            onClick={beginPathEditing}
+            className="flex h-6 min-w-0 flex-1 cursor-text items-center overflow-x-auto rounded px-1 text-[10px] text-slate-500 hover:bg-white/[.04]"
+          >
+            {crumbs.map((crumb, index) => (
+              <span
+                key={`${crumb.path}-${index}`}
+                className="flex shrink-0 items-center"
               >
-                {crumb.label}
-              </button>
-              {index < crumbs.length - 1 && <ChevronRight className="size-3" />}
-            </span>
-          ))}
-        </div>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void loadDirectory(crumb.path)
+                  }}
+                  className="max-w-20 cursor-pointer truncate rounded px-1 py-0.5 hover:bg-white/10 hover:text-slate-200"
+                >
+                  {crumb.label}
+                </button>
+                {index < crumbs.length - 1 && (
+                  <ChevronRight className="size-3" />
+                )}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div
         onDragEnter={(event) => {
