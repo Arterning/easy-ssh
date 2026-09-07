@@ -75,6 +75,7 @@ export function HostsPage() {
   const [tagInput, setTagInput] = useState("")
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<"success" | "error" | null>(null)
+  const [testError, setTestError] = useState("")
   const [menuId, setMenuId] = useState<number | null>(null)
   const groups = useMemo(
     () => Array.from(new Set(hosts.map((host) => host.group))),
@@ -106,6 +107,7 @@ export function HostsPage() {
     setDraft(emptyDraft)
     setTagInput("")
     setTestResult(null)
+    setTestError("")
     setEditorOpen(true)
   }
   function openEdit(host: Host) {
@@ -124,6 +126,7 @@ export function HostsPage() {
     })
     setTagInput(host.tags.join(", "))
     setTestResult(null)
+    setTestError("")
     setMenuId(null)
     setEditorOpen(true)
   }
@@ -152,6 +155,7 @@ export function HostsPage() {
   async function testConnection() {
     setTesting(true)
     setTestResult(null)
+    setTestError("")
     try {
       await hostsApi.test({
         ...draft,
@@ -162,7 +166,7 @@ export function HostsPage() {
       })
       setTestResult("success")
     } catch (error) {
-      setPageError((error as Error).message)
+      setTestError((error as Error).message)
       setTestResult("error")
     } finally {
       setTesting(false)
@@ -193,8 +197,18 @@ export function HostsPage() {
           </div>
         </div>
         <nav className="mt-7 space-y-1 text-sm">
-          <NavItem active icon={<Server />} label="主机" count={hosts.length} onClick={() => navigate("/hosts")} />
-          <NavItem icon={<Bot />} label="智能助手" onClick={() => navigate("/assistant")} />
+          <NavItem
+            active
+            icon={<Server />}
+            label="主机"
+            count={hosts.length}
+            onClick={() => navigate("/hosts")}
+          />
+          <NavItem
+            icon={<Bot />}
+            label="智能助手"
+            onClick={() => navigate("/assistant")}
+          />
           <NavItem icon={<FileClock />} label="连接记录" />
         </nav>
         <div className="mt-auto space-y-1">
@@ -386,6 +400,7 @@ export function HostsPage() {
           setTagInput={setTagInput}
           testing={testing}
           testResult={testResult}
+          testError={testError}
           onTest={testConnection}
           onClose={() => setEditorOpen(false)}
           onSave={saveHost}
@@ -660,6 +675,7 @@ function HostEditor({
   setTagInput,
   testing,
   testResult,
+  testError,
   onTest,
   onClose,
   onSave,
@@ -671,6 +687,7 @@ function HostEditor({
   setTagInput: (v: string) => void
   testing: boolean
   testResult: "success" | "error" | null
+  testError: string
   onTest: () => void
   onClose: () => void
   onSave: () => void
@@ -799,7 +816,7 @@ function HostEditor({
             )}
             {testResult === "success"
               ? "连接测试成功，可以安全保存。"
-              : "请先填写有效的主机地址。"}
+              : testError || "连接测试失败，请检查主机配置。"}
           </div>
         )}
       </div>
