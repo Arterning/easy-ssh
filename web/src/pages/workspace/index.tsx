@@ -25,6 +25,7 @@ import { API_BASE } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { Markdown } from "@/components/markdown"
+import { RemoteFileBrowser } from "@/components/remote-file-browser"
 import { navigate } from "@/router/navigation"
 
 type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
@@ -228,27 +229,35 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
         </div>
       )}
       <div className="flex min-h-0 flex-1">
-        <aside className="w-52 shrink-0 border-r border-white/10 bg-[#0f131a] p-3">
-          <div className="mb-2 px-2 text-[10px] font-semibold tracking-widest text-slate-600 uppercase">
+        <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/10 bg-[#0f131a] p-3">
+          <div className="mb-1 px-1 text-[10px] font-semibold tracking-widest text-slate-600 uppercase">
             终端会话
           </div>
-          <button className="flex w-full items-center gap-2 rounded-md bg-white/[0.06] px-2.5 py-2 text-left text-xs">
+          <button className="flex w-full items-center gap-2 rounded-md bg-white/[0.06] px-2 py-1.5 text-left text-xs">
             <TerminalSquare className="size-3.5 text-blue-400" />
             <span className="flex-1">terminal-1</span>
             <Circle
               className={`size-2 fill-current ${status === "connected" ? "text-emerald-400" : "text-slate-600"}`}
             />
           </button>
-          <div className="mt-6 mb-2 px-2 text-[10px] font-semibold tracking-widest text-slate-600 uppercase">
-            主机信息
+          <div className="mt-2 rounded-md border border-white/[0.06] px-2 py-1.5 text-[10px] text-slate-500">
+            <div className="truncate font-mono text-slate-400">
+              {host ? `${host.username}@${host.address}:${host.port}` : "-"}
+            </div>
+            <div className="mt-0.5 flex items-center gap-2">
+              <span>{host?.authType === "key" ? "SSH 密钥" : "密码认证"}</span>
+              <span>·</span>
+              <span
+                className={
+                  status === "connected" ? "text-emerald-400" : "text-slate-600"
+                }
+              >
+                {status === "connected" ? "已连接" : "未连接"}
+              </span>
+            </div>
           </div>
-          <div className="space-y-2 rounded-lg border border-white/[0.06] p-3 text-[11px] text-slate-500">
-            <Info label="地址" value={host?.address ?? "-"} />
-            <Info label="用户" value={host?.username ?? "-"} />
-            <Info
-              label="认证"
-              value={host?.authType === "key" ? "SSH 密钥" : "密码"}
-            />
+          <div className="mt-3 flex min-h-0 flex-1">
+            <RemoteFileBrowser hostId={hostId} />
           </div>
         </aside>
         <main className="relative min-w-0 flex-1">
@@ -286,14 +295,6 @@ function StatusPill({ status }: { status: ConnectionStatus }) {
       <span className={`size-1.5 rounded-full ${config[1]}`} />
       {config[2]}
     </span>
-  )
-}
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-slate-600">{label}</div>
-      <div className="mt-0.5 truncate font-mono text-slate-400">{value}</div>
-    </div>
   )
 }
 function AgentPanel({
