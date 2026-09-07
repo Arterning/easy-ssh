@@ -187,9 +187,9 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
   }
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-white/10 pt-3">
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex min-w-0 items-center gap-1 px-1">
-        <span className="min-w-0 flex-1 truncate text-[10px] font-semibold tracking-widest text-slate-600 uppercase">
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold tracking-wider text-slate-500 uppercase">
           远程文件
         </span>
         <button
@@ -200,21 +200,21 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
           }}
           className={`shrink-0 rounded p-1 hover:bg-white/10 hover:text-slate-200 ${filterOpen || filter ? "bg-white/10 text-blue-300" : "text-slate-500"}`}
         >
-          <Filter className="size-3.5" />
+          <Filter className="size-4" />
         </button>
         <button
           title="上传文件"
           onClick={() => inputRef.current?.click()}
           className="shrink-0 rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
         >
-          <Upload className="size-3.5" />
+          <Upload className="size-4" />
         </button>
         <button
           title="刷新"
           onClick={() => void loadDirectory(currentPath)}
           className="shrink-0 rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
         >
-          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
         </button>
         <input
           ref={inputRef}
@@ -359,14 +359,14 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
               title={`${entry.mode} · ${formatSize(entry.size)} · ${new Date(entry.modifiedAt).toLocaleString()}`}
               onClick={() => setSelected(entry.path)}
               onDoubleClick={() => open(entry)}
-              className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[11px] ${selected === entry.path ? "bg-blue-500/15 text-blue-200" : "text-slate-400 hover:bg-white/[.06]"}`}
+              className={`group flex w-full items-center gap-2.5 rounded px-2 py-2 text-left text-[13px] ${selected === entry.path ? "bg-blue-500/15 text-blue-200" : "text-slate-300 hover:bg-white/[.06]"}`}
             >
               {entry.type === "directory" ? (
-                <Folder className="size-3.5 shrink-0 fill-amber-400/20 text-amber-400" />
+                <Folder className="size-4.5 shrink-0 fill-amber-400/20 text-amber-400" />
               ) : entry.type === "file" ? (
-                <File className="size-3.5 shrink-0 text-slate-500" />
+                <File className="size-4.5 shrink-0 text-slate-400" />
               ) : (
-                <FileQuestion className="size-3.5 shrink-0 text-slate-600" />
+                <FileQuestion className="size-4.5 shrink-0 text-slate-500" />
               )}
               <span className="min-w-0 flex-1 truncate">{entry.name}</span>
               {entry.type === "file" && (
