@@ -68,6 +68,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/hosts/{id}/terminal", a.terminal)
 	mux.HandleFunc("GET /api/v1/hosts/{id}/files/home", a.fileHome)
 	mux.HandleFunc("GET /api/v1/hosts/{id}/files", a.listRemoteFiles)
+	mux.HandleFunc("DELETE /api/v1/hosts/{id}/files", a.deleteRemoteFile)
 	mux.HandleFunc("GET /api/v1/hosts/{id}/files/download", a.downloadRemoteFile)
 	mux.HandleFunc("POST /api/v1/hosts/{id}/files/upload", a.uploadRemoteFile)
 	mux.HandleFunc("GET /api/v1/settings/ai", a.getSettings)

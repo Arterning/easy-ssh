@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
   File,
   FileQuestion,
@@ -9,6 +11,7 @@ import {
   Folder,
   LoaderCircle,
   RefreshCw,
+  Trash2,
   Upload,
   X,
 } from "lucide-react"
@@ -23,6 +26,7 @@ type Transfer = {
   status: "running" | "success" | "failed" | "canceled"
   error?: string
 }
+type ContextMenu = { entry: RemoteEntry; x: number; y: number }
 
 export function RemoteFileBrowser({ hostId }: { hostId: number }) {
   const [currentPath, setCurrentPath] = useState("")
@@ -37,6 +41,7 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
   const [pathEditing, setPathEditing] = useState(false)
   const [pathInput, setPathInput] = useState("")
   const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const requests = useRef(new Map<string, XMLHttpRequest>())
   const pathInputRef = useRef<HTMLInputElement>(null)
@@ -74,6 +79,23 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
     void loadDirectory()
     return () => requests.current.forEach((xhr) => xhr.abort())
   }, [loadDirectory])
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close()
+    }
+    window.addEventListener("pointerdown", close)
+    window.addEventListener("blur", close)
+    window.addEventListener("keydown", escape)
+    window.addEventListener("scroll", close, true)
+    return () => {
+      window.removeEventListener("pointerdown", close)
+      window.removeEventListener("blur", close)
+      window.removeEventListener("keydown", escape)
+      window.removeEventListener("scroll", close, true)
+    }
+  }, [contextMenu])
   useEffect(() => {
     const container = breadcrumbsRef.current
     if (container) container.scrollLeft = container.scrollWidth
@@ -184,6 +206,35 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
     if (entry.type === "directory") void loadDirectory(entry.path)
     else if (entry.type === "file")
       window.location.assign(filesApi.downloadUrl(hostId, entry.path))
+  }
+  function download(entry: RemoteEntry) {
+    window.location.assign(filesApi.downloadUrl(hostId, entry.path))
+    setContextMenu(null)
+  }
+  async function copyPath(entry: RemoteEntry) {
+    try {
+      await navigator.clipboard.writeText(entry.path)
+    } catch {
+      setError("无法复制路径，请检查浏览器剪贴板权限")
+    }
+    setContextMenu(null)
+  }
+  async function deleteFile(entry: RemoteEntry) {
+    setContextMenu(null)
+    if (
+      !window.confirm(
+        `确认删除远程文件“${entry.name}”？\n\n${entry.path}\n\n此操作无法撤销。`
+      )
+    )
+      return
+    setError("")
+    try {
+      await filesApi.remove(hostId, entry.path)
+      if (selected === entry.path) setSelected("")
+      await loadDirectory(currentPath)
+    } catch (reason) {
+      setError((reason as Error).message)
+    }
   }
 
   return (
@@ -359,6 +410,15 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
               title={`${entry.mode} · ${formatSize(entry.size)} · ${new Date(entry.modifiedAt).toLocaleString()}`}
               onClick={() => setSelected(entry.path)}
               onDoubleClick={() => open(entry)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setSelected(entry.path)
+                setContextMenu({
+                  entry,
+                  x: Math.min(event.clientX, window.innerWidth - 170),
+                  y: Math.min(event.clientY, window.innerHeight - 145),
+                })
+              }}
               className={`group flex w-full items-center gap-2.5 rounded px-2 py-2 text-left text-[13px] ${selected === entry.path ? "bg-blue-500/15 text-blue-200" : "text-slate-300 hover:bg-white/[.06]"}`}
             >
               {entry.type === "directory" ? (
@@ -373,9 +433,7 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
                 <span
                   onClick={(event) => {
                     event.stopPropagation()
-                    window.location.assign(
-                      filesApi.downloadUrl(hostId, entry.path)
-                    )
+                    download(entry)
                   }}
                   className="hidden rounded p-1 group-hover:block hover:bg-white/10"
                 >
@@ -439,6 +497,42 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
           ))}
         </div>
       )}
+      {contextMenu &&
+        createPortal(
+          <div
+            onPointerDown={(event) => event.stopPropagation()}
+            className="fixed z-[100] w-40 rounded-lg border border-white/10 bg-[#171c25] p-1 text-xs text-slate-300 shadow-2xl"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              onClick={() => void copyPath(contextMenu.entry)}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 hover:bg-white/10"
+            >
+              <Copy className="size-3.5" />
+              复制路径
+            </button>
+            {contextMenu.entry.type === "file" && (
+              <>
+                <button
+                  onClick={() => download(contextMenu.entry)}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 hover:bg-white/10"
+                >
+                  <Download className="size-3.5" />
+                  下载
+                </button>
+                <div className="my-1 border-t border-white/10" />
+                <button
+                  onClick={() => void deleteFile(contextMenu.entry)}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-red-400 hover:bg-red-500/10"
+                >
+                  <Trash2 className="size-3.5" />
+                  删除
+                </button>
+              </>
+            )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

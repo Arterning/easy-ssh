@@ -141,6 +141,39 @@ func (a *API) downloadRemoteFile(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *API) deleteRemoteFile(w http.ResponseWriter, r *http.Request) {
+	host, ok := a.find(w, r)
+	if !ok {
+		return
+	}
+	target := cleanRemotePath(r.URL.Query().Get("path"))
+	if target == "." || target == "/" {
+		failMessage(w, 400, "A file path is required")
+		return
+	}
+	sshClient, client, err := a.openSFTP(host)
+	if err != nil {
+		failMessage(w, 422, err.Error())
+		return
+	}
+	defer sshClient.Close()
+	defer client.Close()
+	info, err := client.Lstat(target)
+	if err != nil {
+		failMessage(w, 404, "Remote file was not found")
+		return
+	}
+	if !info.Mode().IsRegular() {
+		failMessage(w, 400, "Only regular files can be deleted")
+		return
+	}
+	if err = client.Remove(target); err != nil {
+		failMessage(w, 422, safeSFTPError(err, "Could not delete the remote file"))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *API) uploadRemoteFile(w http.ResponseWriter, r *http.Request) {
 	host, ok := a.find(w, r)
 	if !ok {

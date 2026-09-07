@@ -23,6 +23,10 @@ export const filesApi = {
     ),
   downloadUrl: (hostId: number, path: string) =>
     `${API_BASE}/hosts/${hostId}/files/download?path=${encodeURIComponent(path)}`,
+  remove: (hostId: number, path: string) =>
+    request<void>(`/hosts/${hostId}/files?path=${encodeURIComponent(path)}`, {
+      method: "DELETE",
+    }),
 }
 
 export function uploadRemoteFile(
