@@ -193,9 +193,11 @@ func (a *API) uploadRemoteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	temp := path.Join(directory, fmt.Sprintf(".%s.easyssh-upload-%d", partName, time.Now().UnixNano()))
-	file, err := client.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_TRUNC)
+	// The nanosecond suffix makes the temporary name unique. Avoid O_EXCL here:
+	// a number of otherwise functional SFTP servers reject that flag.
+	file, err := client.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	if err != nil {
-		failMessage(w, 422, "Could not create the remote temporary file")
+		failMessage(w, 422, safeSFTPError(err, "Could not create a file in the remote directory"))
 		return
 	}
 	written, copyErr := io.Copy(file, part)
