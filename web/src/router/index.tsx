@@ -3,7 +3,8 @@ import { navigate } from "@/router/navigation"
 
 const HostsPage = lazy(() => import("@/pages/hosts"))
 const WorkspacePage = lazy(() => import("@/pages/workspace"))
-const routes = { "/": HostsPage, "/hosts": HostsPage }
+const AssistantPage = lazy(() => import("@/pages/assistant"))
+const routes = { "/": HostsPage, "/hosts": HostsPage, "/assistant": AssistantPage }
 
 function PendingPage() {
   return (

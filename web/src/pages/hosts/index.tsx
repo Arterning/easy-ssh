@@ -37,6 +37,7 @@ import {
   type HostStatus,
 } from "@/api/hosts"
 import { settingsApi } from "@/api/settings"
+import { navigate } from "@/router/navigation"
 
 type HostDraft = HostInput & { password: string; privateKey: string }
 const emptyDraft: HostDraft = {
@@ -192,8 +193,8 @@ export function HostsPage() {
           </div>
         </div>
         <nav className="mt-7 space-y-1 text-sm">
-          <NavItem active icon={<Server />} label="主机" count={hosts.length} />
-          <NavItem icon={<Bot />} label="任务记录" />
+          <NavItem active icon={<Server />} label="主机" count={hosts.length} onClick={() => navigate("/hosts")} />
+          <NavItem icon={<Bot />} label="智能助手" onClick={() => navigate("/assistant")} />
           <NavItem icon={<FileClock />} label="连接记录" />
         </nav>
         <div className="mt-auto space-y-1">
@@ -400,14 +401,17 @@ function NavItem({
   label,
   active,
   count,
+  onClick,
 }: {
   icon: React.ReactNode
   label: string
   active?: boolean
   count?: number
+  onClick?: () => void
 }) {
   return (
     <button
+      onClick={onClick}
       className={`flex h-9 w-full items-center gap-3 rounded-lg px-3 transition ${active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`}
     >
       <span className="[&_svg]:size-4">{icon}</span>

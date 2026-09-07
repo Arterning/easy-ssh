@@ -67,6 +67,12 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/hosts/{id}/agent/tasks", a.listAgentTasks)
 	mux.HandleFunc("POST /api/v1/agent/tasks/{id}/approve", a.approveAgentTask)
 	mux.HandleFunc("POST /api/v1/agent/tasks/{id}/reject", a.rejectAgentTask)
+	mux.HandleFunc("GET /api/v1/assistant/conversations", a.listAssistantConversations)
+	mux.HandleFunc("POST /api/v1/assistant/conversations", a.createAssistantConversation)
+	mux.HandleFunc("GET /api/v1/assistant/conversations/{id}", a.getAssistantConversation)
+	mux.HandleFunc("POST /api/v1/assistant/conversations/{id}/messages", a.sendAssistantMessage)
+	mux.HandleFunc("POST /api/v1/assistant/approvals/{id}/approve", a.approveAssistantCall)
+	mux.HandleFunc("POST /api/v1/assistant/approvals/{id}/reject", a.rejectAssistantCall)
 	return cors(mux)
 }
 func (a *API) listHosts(w http.ResponseWriter, _ *http.Request) {
