@@ -40,6 +40,7 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const requests = useRef(new Map<string, XMLHttpRequest>())
   const pathInputRef = useRef<HTMLInputElement>(null)
+  const breadcrumbsRef = useRef<HTMLDivElement>(null)
 
   const loadDirectory = useCallback(
     async (target?: string) => {
@@ -73,6 +74,10 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
     void loadDirectory()
     return () => requests.current.forEach((xhr) => xhr.abort())
   }, [loadDirectory])
+  useEffect(() => {
+    const container = breadcrumbsRef.current
+    if (container) container.scrollLeft = container.scrollWidth
+  }, [currentPath, pathEditing])
 
   const crumbs = useMemo(() => {
     if (!currentPath || currentPath === ".")
@@ -182,9 +187,9 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col border-t border-white/10 pt-3">
-      <div className="flex items-center gap-1 px-1">
-        <span className="flex-1 text-[10px] font-semibold tracking-widest text-slate-600 uppercase">
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-white/10 pt-3">
+      <div className="flex min-w-0 items-center gap-1 px-1">
+        <span className="min-w-0 flex-1 truncate text-[10px] font-semibold tracking-widest text-slate-600 uppercase">
           远程文件
         </span>
         <button
@@ -193,21 +198,21 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
             setFilterOpen((open) => !open)
             if (filterOpen) setFilter("")
           }}
-          className={`rounded p-1 hover:bg-white/10 hover:text-slate-200 ${filterOpen || filter ? "bg-white/10 text-blue-300" : "text-slate-500"}`}
+          className={`shrink-0 rounded p-1 hover:bg-white/10 hover:text-slate-200 ${filterOpen || filter ? "bg-white/10 text-blue-300" : "text-slate-500"}`}
         >
           <Filter className="size-3.5" />
         </button>
         <button
           title="上传文件"
           onClick={() => inputRef.current?.click()}
-          className="rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
+          className="shrink-0 rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
         >
           <Upload className="size-3.5" />
         </button>
         <button
           title="刷新"
           onClick={() => void loadDirectory(currentPath)}
-          className="rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
+          className="shrink-0 rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
         >
           <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -253,7 +258,7 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
         <button
           disabled={!parent}
           onClick={() => void loadDirectory(parent)}
-          className="rounded p-1 text-slate-500 hover:bg-white/10 disabled:opacity-30"
+          className="shrink-0 rounded p-1 text-slate-500 hover:bg-white/10 disabled:opacity-30"
         >
           <ChevronLeft className="size-3.5" />
         </button>
@@ -273,13 +278,14 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
               if (!loading) setPathEditing(false)
             }}
             aria-label="远程目录路径"
-            className="h-6 min-w-0 flex-1 rounded border border-blue-400/50 bg-black/20 px-2 font-mono text-[10px] text-slate-300 outline-none"
+            className="h-6 w-0 min-w-0 flex-1 rounded border border-blue-400/50 bg-black/20 px-2 font-mono text-[10px] text-slate-300 outline-none"
           />
         ) : (
           <div
+            ref={breadcrumbsRef}
             title="点击编辑路径"
             onClick={beginPathEditing}
-            className="flex h-6 min-w-0 flex-1 cursor-text items-center overflow-x-auto rounded px-1 text-[10px] text-slate-500 hover:bg-white/[.04]"
+            className="flex h-6 w-0 min-w-0 flex-1 cursor-text items-center overflow-x-auto overflow-y-hidden rounded px-1 text-[10px] text-slate-500 hover:bg-white/[.04]"
           >
             {crumbs.map((crumb, index) => (
               <span

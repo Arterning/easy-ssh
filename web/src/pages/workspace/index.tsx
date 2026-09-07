@@ -256,7 +256,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
               </span>
             </div>
           </div>
-          <div className="mt-3 flex min-h-0 flex-1">
+          <div className="mt-3 flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <RemoteFileBrowser hostId={hostId} />
           </div>
         </aside>
