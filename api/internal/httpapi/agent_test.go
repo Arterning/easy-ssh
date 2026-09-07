@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,28 @@ func TestChangeCommandClassification(t *testing.T) {
 	for _, test := range tests {
 		if got := changePattern.MatchString(test.command); got != test.change {
 			t.Errorf("classification for %q = %v, want %v", test.command, got, test.change)
+		}
+	}
+}
+
+func TestTerminalOriginAllowed(t *testing.T) {
+	tests := []struct {
+		origin string
+		host   string
+		want   bool
+	}{
+		{"http://localhost:8080", "localhost:8080", true},
+		{"http://127.0.0.1:8080", "127.0.0.1:8080", true},
+		{"http://localhost:5173", "localhost:8080", true},
+		{"https://untrusted.example", "localhost:8080", false},
+		{"not a url", "localhost:8080", false},
+	}
+	for _, test := range tests {
+		req := httptest.NewRequest("GET", "http://"+test.host+"/api/v1/hosts", nil)
+		req.Host = test.host
+		req.Header.Set("Origin", test.origin)
+		if got := terminalOriginAllowed(req); got != test.want {
+			t.Errorf("terminalOriginAllowed(origin=%q, host=%q) = %v, want %v", test.origin, test.host, got, test.want)
 		}
 	}
 }

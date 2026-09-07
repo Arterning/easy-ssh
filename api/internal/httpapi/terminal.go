@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -17,10 +18,24 @@ import (
 
 var terminalUpgrader = websocket.Upgrader{
 	HandshakeTimeout: 10 * time.Second,
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		return origin == "" || origin == "http://localhost:5173" || origin == "http://127.0.0.1:5173"
-	},
+	CheckOrigin:      terminalOriginAllowed,
+}
+
+func terminalOriginAllowed(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	// Packaged deployments serve the page and WebSocket from the same
+	// host (for example localhost:8080). Keep the two Vite development
+	// origins as explicit exceptions because their API runs on another port.
+	return parsed.Host == r.Host ||
+		parsed.Host == "localhost:5173" ||
+		parsed.Host == "127.0.0.1:5173"
 }
 
 type terminalMessage struct {
