@@ -5,6 +5,7 @@ import {
   Download,
   File,
   FileQuestion,
+  Filter,
   Folder,
   LoaderCircle,
   RefreshCw,
@@ -31,6 +32,8 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [dragging, setDragging] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [filter, setFilter] = useState("")
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const requests = useRef(new Map<string, XMLHttpRequest>())
@@ -79,6 +82,14 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
       })),
     ]
   }, [currentPath])
+
+  const filteredEntries = useMemo(() => {
+    const keyword = filter.trim().toLocaleLowerCase()
+    if (!keyword) return entries
+    return entries.filter((entry) =>
+      entry.name.toLocaleLowerCase().includes(keyword)
+    )
+  }, [entries, filter])
 
   async function uploadFiles(files: FileList | File[]) {
     for (const file of Array.from(files)) await uploadOne(file, false)
@@ -160,6 +171,16 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
           远程文件
         </span>
         <button
+          title="过滤当前目录"
+          onClick={() => {
+            setFilterOpen((open) => !open)
+            if (filterOpen) setFilter("")
+          }}
+          className={`rounded p-1 hover:bg-white/10 hover:text-slate-200 ${filterOpen || filter ? "bg-white/10 text-blue-300" : "text-slate-500"}`}
+        >
+          <Filter className="size-3.5" />
+        </button>
+        <button
           title="上传文件"
           onClick={() => inputRef.current?.click()}
           className="rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
@@ -184,6 +205,33 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
           }}
         />
       </div>
+      {filterOpen && (
+        <div className="relative mt-2 px-1">
+          <Filter className="absolute top-1/2 left-3 size-3 -translate-y-1/2 text-slate-600" />
+          <input
+            autoFocus
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setFilter("")
+                setFilterOpen(false)
+              }
+            }}
+            placeholder="过滤文件名..."
+            className="h-7 w-full rounded border border-white/10 bg-white/[.04] pr-7 pl-7 text-[11px] text-slate-300 outline-none placeholder:text-slate-600 focus:border-blue-400/50"
+          />
+          {filter && (
+            <button
+              title="清空过滤"
+              onClick={() => setFilter("")}
+              className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded p-0.5 text-slate-600 hover:text-slate-300"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
+      )}
       <div className="mt-2 flex items-center gap-1 border-y border-white/[.07] px-1 py-1.5">
         <button
           disabled={!parent}
@@ -248,8 +296,12 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
           <div className="p-5 text-center text-[10px] text-slate-600">
             此目录为空
           </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="p-5 text-center text-[10px] text-slate-600">
+            没有匹配“{filter}”的文件
+          </div>
         ) : (
-          entries.map((entry) => (
+          filteredEntries.map((entry) => (
             <button
               key={entry.path}
               title={`${entry.mode} · ${formatSize(entry.size)} · ${new Date(entry.modifiedAt).toLocaleString()}`}
