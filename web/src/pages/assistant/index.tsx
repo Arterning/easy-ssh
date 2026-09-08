@@ -53,6 +53,8 @@ export function AssistantPage() {
         {
           id: created.id,
           title: created.title,
+          scopeType: created.scopeType,
+          hostId: created.hostId,
           status: created.status,
           createdAt: created.createdAt,
           updatedAt: created.updatedAt,
@@ -79,6 +81,8 @@ export function AssistantPage() {
           ? {
               id: next.id,
               title: next.title,
+              scopeType: next.scopeType,
+              hostId: next.hostId,
               status: next.status,
               createdAt: next.createdAt,
               updatedAt: next.updatedAt,

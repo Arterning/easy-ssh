@@ -7,6 +7,7 @@ import {
   Bot,
   PanelRightClose,
   PanelRightOpen,
+  Plus,
   Plug,
   RefreshCw,
   Send,
@@ -19,7 +20,14 @@ import {
 } from "lucide-react"
 
 import { hostsApi, type Host } from "@/api/hosts"
-import { agentApi, type AgentTask } from "@/api/agent"
+import {
+  assistantApi,
+  type Approval,
+  type AssistantMessage,
+  type Conversation,
+  type ConversationSummary,
+  type ToolCall,
+} from "@/api/assistant"
 import { API_BASE } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
@@ -243,9 +251,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
             className="absolute inset-x-0 top-9 bottom-0 p-3"
           />
         </main>
-        {agentOpen && (
-          <AgentPanel hostId={hostId} connected={status === "connected"} />
-        )}
+        {agentOpen && <AgentPanel hostId={hostId} />}
       </div>
       {settingsOpen && (
         <AISettingsDialog onClose={() => setSettingsOpen(false)} />
@@ -270,75 +276,94 @@ function StatusPill({ status }: { status: ConnectionStatus }) {
     </span>
   )
 }
-function AgentPanel({
-  hostId,
-  connected,
-}: {
-  hostId: number
-  connected: boolean
-}) {
+function AgentPanel({ hostId }: { hostId: number }) {
+  const [items, setItems] = useState<ConversationSummary[]>([])
+  const [conversation, setConversation] = useState<Conversation | null>(null)
   const [question, setQuestion] = useState("")
-  const [tasks, setTasks] = useState<AgentTask[]>([])
   const [working, setWorking] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [loadingHistory, setLoadingHistory] = useState(true)
+  const messageEndRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    agentApi
-      .listTasks(hostId)
-      .then(setTasks)
+    assistantApi
+      .listForHost(hostId)
+      .then(async (list) => {
+        setItems(list)
+        if (list[0]) setConversation(await assistantApi.get(list[0].id))
+        else sync(await assistantApi.createForHost(hostId))
+      })
       .catch((reason: Error) => setError(reason.message))
-      .finally(() => setLoadingHistory(false))
+      .finally(() => setLoading(false))
   }, [hostId])
+  function sync(next: Conversation) {
+    setConversation(next)
+    const summary = {
+      id: next.id,
+      title: next.title,
+      scopeType: next.scopeType,
+      hostId: next.hostId,
+      status: next.status,
+      createdAt: next.createdAt,
+      updatedAt: next.updatedAt,
+    }
+    setItems((current) =>
+      current.some((item) => item.id === next.id)
+        ? current.map((item) => (item.id === next.id ? summary : item))
+        : [summary, ...current]
+    )
+  }
+  async function createConversation() {
+    if (working) return
+    try {
+      sync(await assistantApi.createForHost(hostId))
+    } catch (reason) {
+      setError((reason as Error).message)
+    }
+  }
+  async function openConversation(id: number) {
+    if (working) return
+    try {
+      setConversation(await assistantApi.get(id))
+    } catch (reason) {
+      setError((reason as Error).message)
+    }
+  }
   async function submit() {
-    if (!question.trim() || working) return
+    if (
+      !conversation ||
+      !question.trim() ||
+      working ||
+      conversation.status === "waiting_approval"
+    )
+      return
+    const value = question.trim(),
+      previous = conversation
+    setQuestion("")
     setWorking(true)
     setError("")
-    const value = question
-    setQuestion("")
-    const optimisticId = -Date.now()
-    const optimisticTask: AgentTask = {
-      id: optimisticId,
-      hostId,
-      question: value,
-      summary: "",
-      status: "submitting",
-      commands: [],
-      createdAt: new Date().toISOString(),
-    }
-    setTasks((items) => [...items, optimisticTask])
+    setConversation({
+      ...conversation,
+      messages: [...conversation.messages, { role: "user", content: value }],
+    })
     try {
-      const task = await agentApi.createTask(hostId, value)
-      setTasks((items) =>
-        items.map((item) => (item.id === optimisticId ? task : item))
-      )
+      sync(await assistantApi.send(conversation.id, value))
     } catch (reason) {
-      setTasks((items) => items.filter((item) => item.id !== optimisticId))
+      setConversation(previous)
       setQuestion(value)
       setError((reason as Error).message)
     } finally {
       setWorking(false)
     }
   }
-  async function approve(taskId: number) {
-    setWorking(true)
-    try {
-      const task = await agentApi.approve(taskId)
-      setTasks((items) =>
-        items.map((item) => (item.id === task.id ? task : item))
-      )
-    } catch (reason) {
-      setError((reason as Error).message)
-    } finally {
-      setWorking(false)
-    }
-  }
-  async function reject(taskId: number) {
+  async function decide(approval: Approval, approved: boolean) {
+    if (working) return
     setWorking(true)
     setError("")
     try {
-      const task = await agentApi.reject(taskId)
-      setTasks((items) =>
-        items.map((item) => (item.id === task.id ? task : item))
+      sync(
+        approved
+          ? await assistantApi.approve(approval.id)
+          : await assistantApi.reject(approval.id)
       )
     } catch (reason) {
       setError((reason as Error).message)
@@ -346,104 +371,99 @@ function AgentPanel({
       setWorking(false)
     }
   }
+  const pending =
+    conversation?.approvals.filter(
+      (approval) => approval.status === "pending"
+    ) ?? []
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  }, [conversation?.messages.length, pending.length, working])
   return (
-    <aside className="flex w-[380px] shrink-0 flex-col border-l border-white/10 bg-[#11151d]">
-      <div className="flex h-9 items-center gap-2 border-b border-white/[0.07] px-3 text-xs font-medium">
+    <aside className="flex w-[400px] shrink-0 flex-col border-l border-white/10 bg-[#11151d]">
+      <div className="flex h-10 items-center gap-2 border-b border-white/[0.07] px-3 text-xs font-medium">
         <Bot className="size-3.5 text-violet-400" />
-        运维 Agent
+        <select
+          value={conversation?.id ?? ""}
+          onChange={(event) =>
+            void openConversation(Number(event.target.value))
+          }
+          disabled={working}
+          className="min-w-0 flex-1 bg-transparent text-slate-300 outline-none"
+        >
+          {items.map((item) => (
+            <option key={item.id} value={item.id} className="bg-[#11151d]">
+              {item.title}
+            </option>
+          ))}
+        </select>
+        <button
+          title="新建对话"
+          onClick={() => void createConversation()}
+          className="rounded p-1 text-slate-400 hover:bg-white/10"
+        >
+          <Plus className="size-3.5" />
+        </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {loadingHistory ? (
+        {loading ? (
           <div className="grid h-full place-items-center">
             <RefreshCw className="size-4 animate-spin text-slate-600" />
           </div>
-        ) : tasks.length === 0 ? (
-          <div className="flex h-full items-center justify-center p-6 text-center">
+        ) : !conversation || conversation.messages.length === 0 ? (
+          <div className="grid h-full place-items-center px-8 text-center">
             <div>
               <div className="mx-auto grid size-11 place-items-center rounded-xl bg-violet-500/10">
                 <ShieldCheck className="size-5 text-violet-400" />
               </div>
-              <h3 className="mt-4 text-sm font-medium">让 Agent 协助运维</h3>
+              <h3 className="mt-4 text-sm font-medium">让 Agent 协助排障</h3>
               <p className="mt-2 text-xs leading-5 text-slate-500">
-                只读操作自动执行，变更操作需要你的确认。
+                Agent
+                只能操作当前主机，可根据命令结果多轮分析。敏感操作需要逐条确认。
               </p>
-              {!connected && (
-                <p className="mt-3 text-xs text-amber-400/80">请先连接主机</p>
-              )}
             </div>
           </div>
         ) : (
-          <div className="space-y-5">
-            {tasks.map((task) => (
-              <div key={task.id}>
-                <div className="rounded-lg bg-white/[0.05] p-3 text-xs text-slate-300">
-                  {task.question}
-                </div>
-                {task.status === "submitting" ? (
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                    <RefreshCw className="size-3 animate-spin" />
-                    正在发送并生成执行计划…
-                  </div>
-                ) : (
-                  <Markdown className="mt-3 text-xs text-slate-400 [&_code]:bg-white/10 [&_pre]:bg-black/30">
-                    {task.summary}
-                  </Markdown>
-                )}
-                <div className="mt-2 space-y-2">
-                  {task.commands.map((command, index) => (
-                    <div
-                      key={`${task.id}-${index}`}
-                      className="rounded-lg border border-white/[0.08] bg-black/20 p-3"
-                    >
-                      <div className="flex items-center gap-2 text-[11px]">
-                        <span
-                          className={`rounded px-1.5 py-0.5 ${command.risk === "readonly" ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}
-                        >
-                          {command.risk === "readonly" ? "只读" : "变更"}
-                        </span>
-                        <span className="text-slate-500">
-                          {command.description}
-                        </span>
-                      </div>
-                      <pre className="mt-2 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-blue-200">
-                        $ {command.command}
-                      </pre>
-                      {command.output && (
-                        <pre className="mt-2 max-h-40 overflow-auto border-t border-white/[0.06] pt-2 font-mono text-[10px] whitespace-pre-wrap text-slate-400">
-                          {command.output}
-                        </pre>
-                      )}
-                      {command.status === "pending_approval" && (
-                        <div className="mt-3 flex gap-2">
-                          <Button
-                            size="sm"
-                            className="bg-amber-500 text-black hover:bg-amber-400"
-                            onClick={() => void approve(task.id)}
-                            disabled={working}
-                          >
-                            确认执行
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-white/10 bg-transparent text-slate-300 hover:bg-white/10"
-                            onClick={() => void reject(task.id)}
-                            disabled={working}
-                          >
-                            拒绝
-                          </Button>
-                        </div>
-                      )}
-                      {command.status === "rejected" && (
-                        <div className="mt-2 text-[11px] text-slate-500">
-                          已拒绝执行
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <div className="space-y-4">
+            {conversation.messages.map((message, index) => (
+              <WorkspaceMessage key={index} message={message} />
             ))}
+          </div>
+        )}
+        {pending.map((approval) => (
+          <div
+            key={approval.id}
+            className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs"
+          >
+            <div className="font-medium text-amber-300">需要确认敏感操作</div>
+            <div className="mt-1 text-slate-400">{approval.riskReason}</div>
+            <pre className="mt-2 max-h-32 overflow-auto rounded bg-black/30 p-2 whitespace-pre-wrap text-blue-200">
+              $ {approval.command}
+            </pre>
+            <div className="mt-3 flex gap-2">
+              <Button
+                size="sm"
+                className="bg-amber-500 text-black hover:bg-amber-400"
+                onClick={() => void decide(approval, true)}
+                disabled={working}
+              >
+                确认执行
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/10 bg-transparent text-slate-300"
+                onClick={() => void decide(approval, false)}
+                disabled={working}
+              >
+                拒绝
+              </Button>
+            </div>
+          </div>
+        ))}
+        {working && (
+          <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+            <RefreshCw className="size-3 animate-spin" />
+            Agent 正在分析并操作当前主机…
           </div>
         )}
         {error && (
@@ -451,6 +471,7 @@ function AgentPanel({
             {error}
           </div>
         )}
+        <div ref={messageEndRef} />
       </div>
       <div className="border-t border-white/[0.07] p-3">
         <div className="relative">
@@ -463,15 +484,25 @@ function AgentPanel({
                 void submit()
               }
             }}
-            disabled={!connected || working}
+            disabled={
+              working ||
+              !conversation ||
+              conversation.status === "waiting_approval"
+            }
             className="h-24 w-full resize-none rounded-lg border border-white/10 bg-white/[0.03] p-3 pr-10 text-xs text-slate-300 outline-none placeholder:text-slate-600 disabled:opacity-60"
             placeholder={
-              connected ? "描述你的运维任务，Enter 发送..." : "请先连接主机"
+              conversation?.status === "waiting_approval"
+                ? "请先处理待确认命令"
+                : "描述当前主机的运维任务，Enter 发送..."
             }
           />
           <button
             onClick={() => void submit()}
-            disabled={!connected || working || !question.trim()}
+            disabled={
+              working ||
+              !question.trim() ||
+              conversation?.status === "waiting_approval"
+            }
             className="absolute right-2.5 bottom-2.5 grid size-7 place-items-center rounded-md bg-violet-500 text-white disabled:opacity-40"
           >
             {working ? (
@@ -483,6 +514,74 @@ function AgentPanel({
         </div>
       </div>
     </aside>
+  )
+}
+
+function WorkspaceMessage({ message }: { message: AssistantMessage }) {
+  if (message.role === "tool")
+    return <WorkspaceToolResult content={message.content ?? ""} />
+  return (
+    <div
+      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+    >
+      <div
+        className={`max-w-[92%] rounded-xl px-3 py-2 text-xs ${message.role === "user" ? "bg-violet-500 whitespace-pre-wrap text-white" : "border border-white/[0.08] bg-black/20 text-slate-300"}`}
+      >
+        {message.role === "assistant" && message.content ? (
+          <Markdown className="[&_code]:bg-white/10 [&_pre]:bg-black/30">
+            {message.content}
+          </Markdown>
+        ) : (
+          message.content
+        )}
+        {message.tool_calls?.map((call) => (
+          <WorkspaceToolCall key={call.id} call={call} />
+        ))}
+      </div>
+    </div>
+  )
+}
+function WorkspaceToolCall({ call }: { call: ToolCall }) {
+  let args: Record<string, unknown> = {}
+  try {
+    args = JSON.parse(call.function.arguments)
+  } catch {
+    /* show raw arguments */
+  }
+  return (
+    <div className="mt-2 rounded-lg bg-black/30 p-2">
+      <div className="text-[10px] text-slate-500">
+        调用工具 · {call.function.name}
+      </div>
+      <pre className="mt-1 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-blue-200">
+        $ {String(args.command ?? call.function.arguments)}
+      </pre>
+    </div>
+  )
+}
+function WorkspaceToolResult({ content }: { content: string }) {
+  let result: Record<string, unknown> = {}
+  try {
+    result = JSON.parse(content)
+  } catch {
+    return null
+  }
+  if (result.status === "approval_required" || result.status === "deferred")
+    return null
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
+      <div className="text-[10px] text-slate-500">
+        执行结果 · {String(result.status ?? "unknown")}
+        {result.exit_code !== undefined
+          ? ` · exit ${String(result.exit_code)}`
+          : ""}
+      </div>
+      <pre className="mt-2 max-h-56 overflow-auto font-mono text-[10px] whitespace-pre-wrap text-slate-400">
+        {result.stdout
+          ? String(result.stdout)
+          : JSON.stringify(result, null, 2)}
+      </pre>
+    </div>
   )
 }
 

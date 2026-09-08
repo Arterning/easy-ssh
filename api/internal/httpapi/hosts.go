@@ -79,6 +79,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/agent/tasks/{id}/reject", a.rejectAgentTask)
 	mux.HandleFunc("GET /api/v1/assistant/conversations", a.listAssistantConversations)
 	mux.HandleFunc("POST /api/v1/assistant/conversations", a.createAssistantConversation)
+	mux.HandleFunc("GET /api/v1/hosts/{id}/assistant/conversations", a.listHostAssistantConversations)
+	mux.HandleFunc("POST /api/v1/hosts/{id}/assistant/conversations", a.createHostAssistantConversation)
 	mux.HandleFunc("GET /api/v1/assistant/conversations/{id}", a.getAssistantConversation)
 	mux.HandleFunc("POST /api/v1/assistant/conversations/{id}/messages", a.sendAssistantMessage)
 	mux.HandleFunc("POST /api/v1/assistant/approvals/{id}/approve", a.approveAssistantCall)

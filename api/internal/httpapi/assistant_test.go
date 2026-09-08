@@ -8,6 +8,16 @@ import (
 	"easyssh/api/internal/model"
 )
 
+func TestHostAssistantToolDoesNotExposeHostID(t *testing.T) {
+	raw, err := json.Marshal(hostAssistantTools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"host_id"`) {
+		t.Fatalf("host-scoped tool must not let the model select a host: %s", raw)
+	}
+}
+
 func TestAssistantCommandRisk(t *testing.T) {
 	tests := []struct {
 		command   string

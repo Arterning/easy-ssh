@@ -23,6 +23,8 @@ export type Approval = {
 export type Conversation = {
   id: number
   title: string
+  scopeType: "global" | "host"
+  hostId: number | null
   status: "ready" | "waiting_approval"
   messages: AssistantMessage[]
   approvals: Approval[]
@@ -33,13 +35,26 @@ export type ConversationSummary = Omit<Conversation, "messages" | "approvals">
 
 export const assistantApi = {
   list: () => request<ConversationSummary[]>("/assistant/conversations"),
-  create: () => request<Conversation>("/assistant/conversations", { method: "POST" }),
+  create: () =>
+    request<Conversation>("/assistant/conversations", { method: "POST" }),
+  listForHost: (hostId: number) =>
+    request<ConversationSummary[]>(`/hosts/${hostId}/assistant/conversations`),
+  createForHost: (hostId: number) =>
+    request<Conversation>(`/hosts/${hostId}/assistant/conversations`, {
+      method: "POST",
+    }),
   get: (id: number) => request<Conversation>(`/assistant/conversations/${id}`),
   send: (id: number, message: string) =>
     request<Conversation>(`/assistant/conversations/${id}/messages`, {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
-  approve: (id: number) => request<Conversation>(`/assistant/approvals/${id}/approve`, { method: "POST" }),
-  reject: (id: number) => request<Conversation>(`/assistant/approvals/${id}/reject`, { method: "POST" }),
+  approve: (id: number) =>
+    request<Conversation>(`/assistant/approvals/${id}/approve`, {
+      method: "POST",
+    }),
+  reject: (id: number) =>
+    request<Conversation>(`/assistant/approvals/${id}/reject`, {
+      method: "POST",
+    }),
 }

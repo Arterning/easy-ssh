@@ -51,21 +51,58 @@ var assistantTools = []map[string]any{
 	{"type": "function", "function": map[string]any{"name": "ssh_exec", "description": "Execute a non-interactive command on a host over SSH. Credentials are resolved only by the backend. Sensitive commands require individual approval. sudo must be non-interactive.", "parameters": map[string]any{"type": "object", "properties": map[string]any{"host_id": map[string]any{"type": "integer"}, "command": map[string]any{"type": "string"}, "timeout_sec": map[string]any{"type": "integer", "description": "Default 30, maximum 120"}}, "required": []string{"host_id", "command"}, "additionalProperties": false}}},
 }
 
+var hostAssistantTools = []map[string]any{
+	{"type": "function", "function": map[string]any{
+		"name": "ssh_exec", "description": "Execute a non-interactive command on the current workspace host over SSH. Credentials and host selection are resolved only by the backend. Sensitive commands require individual approval. sudo must be non-interactive.",
+		"parameters": map[string]any{"type": "object", "properties": map[string]any{"command": map[string]any{"type": "string"}, "timeout_sec": map[string]any{"type": "integer", "description": "Default 30, maximum 120"}}, "required": []string{"command"}, "additionalProperties": false},
+	}},
+}
+
 func (a *API) listAssistantConversations(w http.ResponseWriter, _ *http.Request) {
 	var rows []model.AssistantConversation
-	if err := a.db.Order("updated_at desc").Limit(100).Find(&rows).Error; err != nil {
+	if err := a.db.Where("scope_type = ? OR scope_type = ''", "global").Order("updated_at desc").Limit(100).Find(&rows).Error; err != nil {
 		fail(w, 500, err)
 		return
 	}
 	result := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		result = append(result, map[string]any{"id": row.ID, "title": row.Title, "status": row.Status, "createdAt": row.CreatedAt, "updatedAt": row.UpdatedAt})
+		result = append(result, conversationSummary(row))
 	}
 	writeJSON(w, 200, result)
 }
 
 func (a *API) createAssistantConversation(w http.ResponseWriter, _ *http.Request) {
-	row := model.AssistantConversation{Title: "New conversation", MessagesJSON: "[]", Status: "ready"}
+	row := model.AssistantConversation{Title: "New conversation", ScopeType: "global", MessagesJSON: "[]", Status: "ready"}
+	if err := a.db.Create(&row).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	a.writeConversation(w, row, 201)
+}
+
+func (a *API) listHostAssistantConversations(w http.ResponseWriter, r *http.Request) {
+	host, ok := a.find(w, r)
+	if !ok {
+		return
+	}
+	var rows []model.AssistantConversation
+	if err := a.db.Where("scope_type = ? AND host_id = ?", "host", host.ID).Order("updated_at desc").Limit(100).Find(&rows).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	result := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, conversationSummary(row))
+	}
+	writeJSON(w, 200, result)
+}
+
+func (a *API) createHostAssistantConversation(w http.ResponseWriter, r *http.Request) {
+	host, ok := a.find(w, r)
+	if !ok {
+		return
+	}
+	row := model.AssistantConversation{Title: "New conversation", ScopeType: "host", HostID: &host.ID, MessagesJSON: "[]", Status: "ready"}
 	if err := a.db.Create(&row).Error; err != nil {
 		fail(w, 500, err)
 		return
@@ -161,7 +198,7 @@ func (a *API) rejectAssistantCall(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) runAssistant(ctx context.Context, row *model.AssistantConversation, messages []assistantMessage) error {
 	for step := 0; step < 8; step++ {
-		message, err := a.requestAssistantCompletion(ctx, messages)
+		message, err := a.requestAssistantCompletion(ctx, *row, messages)
 		if err != nil {
 			return err
 		}
@@ -171,7 +208,7 @@ func (a *API) runAssistant(ctx context.Context, row *model.AssistantConversation
 			return a.saveConversation(row, messages)
 		}
 		for index, call := range message.ToolCalls {
-			content, pending := a.executeAssistantTool(ctx, row.ID, call)
+			content, pending := a.executeAssistantTool(ctx, *row, call)
 			if pending {
 				for _, skipped := range message.ToolCalls[index+1:] {
 					body, _ := json.Marshal(map[string]any{"status": "deferred", "message": "A previous command is waiting for approval"})
@@ -186,7 +223,7 @@ func (a *API) runAssistant(ctx context.Context, row *model.AssistantConversation
 	return fmt.Errorf("assistant exceeded the maximum of 8 tool steps")
 }
 
-func (a *API) requestAssistantCompletion(ctx context.Context, messages []assistantMessage) (assistantMessage, error) {
+func (a *API) requestAssistantCompletion(ctx context.Context, conversation model.AssistantConversation, messages []assistantMessage) (assistantMessage, error) {
 	var settings model.AISettings
 	if err := a.db.First(&settings).Error; err != nil {
 		return assistantMessage{}, fmt.Errorf("configure the AI model first")
@@ -195,8 +232,21 @@ func (a *API) requestAssistantCompletion(ctx context.Context, messages []assista
 	if err != nil || key == "" {
 		return assistantMessage{}, fmt.Errorf("configure the API key first")
 	}
-	system := assistantMessage{Role: "system", Content: "You are the EasySSH operations assistant. Use host_list or host_search when the target is ambiguous and use only returned host_id values. Prefer minimal read-only diagnostics. Never ask for or expose passwords, private keys, API keys, tokens, or credentials. ssh_exec is non-interactive; use sudo -n for sudo. Clearly summarize results and failures in the user's language."}
-	payload := map[string]any{"model": settings.Model, "temperature": 0.1, "messages": append([]assistantMessage{system}, messages...), "tools": assistantTools, "tool_choice": "auto"}
+	systemContent := "You are the EasySSH operations assistant. Use host_list or host_search when the target is ambiguous and use only returned host_id values. Prefer minimal read-only diagnostics. Never ask for or expose passwords, private keys, API keys, tokens, or credentials. ssh_exec is non-interactive; use sudo -n for sudo. Clearly summarize results and failures in the user's language."
+	tools := assistantTools
+	if conversation.ScopeType == "host" {
+		if conversation.HostID == nil {
+			return assistantMessage{}, fmt.Errorf("host-scoped conversation has no host")
+		}
+		var host model.Host
+		if err := a.db.First(&host, *conversation.HostID).Error; err != nil {
+			return assistantMessage{}, fmt.Errorf("workspace host no longer exists")
+		}
+		systemContent = fmt.Sprintf("You are the EasySSH operations assistant for one fixed workspace host: name=%s, address=%s, username=%s. You can operate only this current host. Diagnose iteratively with ssh_exec and use results to decide the next step. Prefer minimal read-only commands. Never ask for or expose passwords, private keys, API keys, tokens, or credentials. Commands must be non-interactive; use sudo -n for sudo. Clearly summarize results and failures in the user's language.", host.Name, host.Address, host.Username)
+		tools = hostAssistantTools
+	}
+	system := assistantMessage{Role: "system", Content: systemContent}
+	payload := map[string]any{"model": settings.Model, "temperature": 0.1, "messages": append([]assistantMessage{system}, messages...), "tools": tools, "tool_choice": "auto"}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(settings.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
@@ -232,8 +282,11 @@ func (a *API) requestAssistantCompletion(ctx context.Context, messages []assista
 	return result.Choices[0].Message, nil
 }
 
-func (a *API) executeAssistantTool(ctx context.Context, conversationID uint, call assistantToolCall) (string, bool) {
+func (a *API) executeAssistantTool(ctx context.Context, conversation model.AssistantConversation, call assistantToolCall) (string, bool) {
 	encode := func(value any) string { raw, _ := json.Marshal(value); return string(raw) }
+	if conversation.ScopeType == "host" && call.Function.Name != "ssh_exec" {
+		return encode(map[string]any{"error": "this tool is unavailable in a host-scoped workspace"}), false
+	}
 	switch call.Function.Name {
 	case "host_list":
 		var args struct {
@@ -285,6 +338,12 @@ func (a *API) executeAssistantTool(ctx context.Context, conversationID uint, cal
 		}
 		args.Command = strings.TrimSpace(args.Command)
 		args.TimeoutSec = normalizeTimeout(args.TimeoutSec)
+		if conversation.ScopeType == "host" {
+			if conversation.HostID == nil {
+				return encode(map[string]any{"error": "workspace host is missing"}), false
+			}
+			args.HostID = *conversation.HostID
+		}
 		var host model.Host
 		if args.HostID == 0 || a.db.First(&host, args.HostID).Error != nil {
 			return encode(map[string]any{"error": "host not found"}), false
@@ -297,7 +356,7 @@ func (a *API) executeAssistantTool(ctx context.Context, conversationID uint, cal
 		}
 		if isSensitiveCommand(args.Command) {
 			reason := riskReason(args.Command)
-			approval := model.AssistantApproval{ConversationID: conversationID, ToolCallID: call.ID, HostID: args.HostID, Command: args.Command, TimeoutSec: args.TimeoutSec, RiskReason: reason, Status: "pending", ExpiresAt: time.Now().Add(15 * time.Minute)}
+			approval := model.AssistantApproval{ConversationID: conversation.ID, ToolCallID: call.ID, HostID: args.HostID, Command: args.Command, TimeoutSec: args.TimeoutSec, RiskReason: reason, Status: "pending", ExpiresAt: time.Now().Add(15 * time.Minute)}
 			if err := a.db.Create(&approval).Error; err != nil {
 				return encode(map[string]any{"error": err.Error()}), false
 			}
@@ -446,5 +505,9 @@ func decodeAssistantMessages(raw string) []assistantMessage {
 func (a *API) writeConversation(w http.ResponseWriter, row model.AssistantConversation, status int) {
 	var approvals []model.AssistantApproval
 	a.db.Where("conversation_id = ?", row.ID).Order("created_at asc").Find(&approvals)
-	writeJSON(w, status, map[string]any{"id": row.ID, "title": row.Title, "status": row.Status, "messages": decodeAssistantMessages(row.MessagesJSON), "approvals": approvals, "createdAt": row.CreatedAt, "updatedAt": row.UpdatedAt})
+	writeJSON(w, status, map[string]any{"id": row.ID, "title": row.Title, "scopeType": row.ScopeType, "hostId": row.HostID, "status": row.Status, "messages": decodeAssistantMessages(row.MessagesJSON), "approvals": approvals, "createdAt": row.CreatedAt, "updatedAt": row.UpdatedAt})
+}
+
+func conversationSummary(row model.AssistantConversation) map[string]any {
+	return map[string]any{"id": row.ID, "title": row.Title, "scopeType": row.ScopeType, "hostId": row.HostID, "status": row.Status, "createdAt": row.CreatedAt, "updatedAt": row.UpdatedAt}
 }

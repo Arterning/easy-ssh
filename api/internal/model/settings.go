@@ -28,6 +28,8 @@ type AgentTask struct {
 type AssistantConversation struct {
 	ID           uint   `gorm:"primaryKey"`
 	Title        string `gorm:"size:200;not null"`
+	ScopeType    string `gorm:"size:20;not null;default:global;index"`
+	HostID       *uint  `gorm:"index"`
 	MessagesJSON string `gorm:"type:text;not null"`
 	Status       string `gorm:"size:30;not null;default:ready"`
 	CreatedAt    time.Time
