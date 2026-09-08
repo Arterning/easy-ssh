@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Activity,
   Bot,
@@ -31,6 +31,7 @@ export function AssistantPage() {
   const [input, setInput] = useState("")
   const [working, setWorking] = useState(false)
   const [error, setError] = useState("")
+  const messageEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void load()
@@ -141,6 +142,9 @@ export function AssistantPage() {
       ) ?? [],
     [conversation]
   )
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  }, [conversation?.id, conversation?.messages.length, pending.length, working])
 
   return (
     <div className="flex h-svh min-w-[1024px] bg-muted/25 text-foreground">
@@ -273,6 +277,7 @@ export function AssistantPage() {
                 </button>
               </div>
             )}
+            <div ref={messageEndRef} />
           </div>
         </div>
         <div className="shrink-0 border-t bg-background p-4">
