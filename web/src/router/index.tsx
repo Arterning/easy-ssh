@@ -5,10 +5,13 @@ const HostsPage = lazy(() => import("@/pages/hosts"))
 const WorkspacePage = lazy(() => import("@/pages/workspace"))
 const AssistantPage = lazy(() => import("@/pages/assistant"))
 const ServicesPage = lazy(() => import("@/pages/services"))
+const DatabasesPage = lazy(() => import("@/pages/databases"))
+const DatabaseWorkspacePage = lazy(() => import("@/pages/database-workspace"))
 const routes = {
   "/": HostsPage,
   "/hosts": HostsPage,
   "/services": ServicesPage,
+  "/databases": DatabasesPage,
   "/assistant": AssistantPage,
 }
 
@@ -39,6 +42,13 @@ export function AppRouter() {
     return (
       <Suspense fallback={<PendingPage />}>
         <WorkspacePage hostId={Number(workspaceMatch[1])} />
+      </Suspense>
+    )
+  const databaseMatch = path.match(/^\/database\/(\d+)$/)
+  if (databaseMatch)
+    return (
+      <Suspense fallback={<PendingPage />}>
+        <DatabaseWorkspacePage databaseId={Number(databaseMatch[1])} />
       </Suspense>
     )
   return (

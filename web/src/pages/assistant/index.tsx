@@ -4,6 +4,7 @@ import {
   Bot,
   Check,
   Clock,
+  Database,
   LoaderCircle,
   MessageSquare,
   Plus,
@@ -174,6 +175,13 @@ export function AssistantPage() {
           >
             <Activity className="size-4" />
             服务
+          </button>
+          <button
+            onClick={() => navigate("/databases")}
+            className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-muted-foreground hover:bg-sidebar-accent"
+          >
+            <Database className="size-4" />
+            数据库
           </button>
           <button className="flex h-9 w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 font-medium">
             <Bot className="size-4" />

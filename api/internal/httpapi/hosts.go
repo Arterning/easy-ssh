@@ -92,6 +92,13 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/services/{id}/check", a.checkServiceNow)
 	mux.HandleFunc("GET /api/v1/services/{id}/checks", a.listServiceChecks)
 	mux.HandleFunc("GET /api/v1/services/events", a.serviceEvents)
+	mux.HandleFunc("GET /api/v1/databases", a.listDatabaseConnections)
+	mux.HandleFunc("POST /api/v1/databases", a.createDatabaseConnection)
+	mux.HandleFunc("GET /api/v1/databases/{id}", a.getDatabaseConnection)
+	mux.HandleFunc("PUT /api/v1/databases/{id}", a.updateDatabaseConnection)
+	mux.HandleFunc("DELETE /api/v1/databases/{id}", a.deleteDatabaseConnection)
+	mux.HandleFunc("POST /api/v1/databases/test", a.testDatabaseInput)
+	mux.HandleFunc("POST /api/v1/databases/{id}/test", a.testSavedDatabaseConnection)
 	return cors(mux)
 }
 func (a *API) listHosts(w http.ResponseWriter, _ *http.Request) {

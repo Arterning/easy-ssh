@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err = db.AutoMigrate(&model.Host{}, &model.TerminalSession{}, &model.AISettings{}, &model.AgentTask{}, &model.AssistantConversation{}, &model.AssistantApproval{}, &model.Service{}, &model.ServiceCheck{}); err != nil {
+	if err = db.AutoMigrate(&model.Host{}, &model.TerminalSession{}, &model.AISettings{}, &model.AgentTask{}, &model.AssistantConversation{}, &model.AssistantApproval{}, &model.Service{}, &model.ServiceCheck{}, &model.DatabaseConnection{}); err != nil {
 		log.Fatal(err)
 	}
 	vault, err := cryptox.Open(cfg.DataDir)

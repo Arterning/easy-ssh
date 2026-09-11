@@ -210,6 +210,11 @@ export function HostsPage() {
             onClick={() => navigate("/services")}
           />
           <NavItem
+            icon={<Database />}
+            label="数据库"
+            onClick={() => navigate("/databases")}
+          />
+          <NavItem
             icon={<Bot />}
             label="智能助手"
             onClick={() => navigate("/assistant")}

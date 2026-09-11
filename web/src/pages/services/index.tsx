@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CirclePause,
   Clock3,
+  Database,
   ExternalLink,
   Gauge,
   LoaderCircle,
@@ -200,6 +201,11 @@ export function ServicesPage() {
             onClick={() => navigate("/hosts")}
           />
           <Nav active icon={<Activity />} label="服务" />
+          <Nav
+            icon={<Database />}
+            label="数据库"
+            onClick={() => navigate("/databases")}
+          />
           <Nav
             icon={<Bot />}
             label="智能助手"
