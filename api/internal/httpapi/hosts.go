@@ -99,6 +99,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/databases/{id}", a.deleteDatabaseConnection)
 	mux.HandleFunc("POST /api/v1/databases/test", a.testDatabaseInput)
 	mux.HandleFunc("POST /api/v1/databases/{id}/test", a.testSavedDatabaseConnection)
+	mux.HandleFunc("GET /api/v1/databases/{id}/schema", a.databaseSchema)
+	mux.HandleFunc("POST /api/v1/databases/{id}/execute", a.executeDatabaseSQL)
 	return cors(mux)
 }
 func (a *API) listHosts(w http.ResponseWriter, _ *http.Request) {

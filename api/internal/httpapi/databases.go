@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"net"
@@ -261,22 +262,31 @@ func databaseTestResponse(w http.ResponseWriter, start time.Time, err error) {
 func (a *API) testDatabaseConnection(ctx context.Context, item model.DatabaseConnection) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	db, closeFn, err := a.openDatabase(ctx, item)
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+	return db.PingContext(ctx)
+}
+
+func (a *API) openDatabase(ctx context.Context, item model.DatabaseConnection) (*sql.DB, func(), error) {
 	host, port := item.Address, item.Port
-	var closeTunnel func()
+	closeTunnel := func() {}
 	if item.UseSSHTunnel {
 		localAddress, closeFn, err := a.openDatabaseTunnel(ctx, item)
 		if err != nil {
-			return fmt.Errorf("SSH 隧道连接失败: %w", err)
+			return nil, closeTunnel, fmt.Errorf("SSH 隧道连接失败: %w", err)
 		}
 		closeTunnel = closeFn
-		defer closeTunnel()
 		var portText string
 		host, portText, _ = net.SplitHostPort(localAddress)
 		port, _ = strconv.Atoi(portText)
 	}
 	password, err := a.vault.Decrypt(item.PasswordEncrypted)
 	if err != nil {
-		return err
+		closeTunnel()
+		return nil, func() {}, err
 	}
 	var dialector gorm.Dialector
 	switch item.Type {
@@ -298,14 +308,15 @@ func (a *API) testDatabaseConnection(ctx context.Context, item model.DatabaseCon
 	}
 	db, err := gorm.Open(dialector, &gorm.Config{DisableAutomaticPing: true})
 	if err != nil {
-		return err
+		closeTunnel()
+		return nil, func() {}, err
 	}
 	sqlDB, err := db.DB()
 	if err != nil {
-		return err
+		closeTunnel()
+		return nil, func() {}, err
 	}
-	defer sqlDB.Close()
-	return sqlDB.PingContext(ctx)
+	return sqlDB, func() { sqlDB.Close(); closeTunnel() }, nil
 }
 
 func (a *API) openDatabaseTunnel(ctx context.Context, item model.DatabaseConnection) (string, func(), error) {
