@@ -48,7 +48,7 @@ export function AppRouter() {
   if (databaseMatch)
     return (
       <Suspense fallback={<PendingPage />}>
-        <DatabaseWorkspacePage databaseId={Number(databaseMatch[1])} />
+        <DatabaseWorkspacePage key={databaseMatch[1]} databaseId={Number(databaseMatch[1])} />
       </Suspense>
     )
   return (

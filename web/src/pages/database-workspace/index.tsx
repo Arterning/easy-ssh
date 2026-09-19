@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, ArrowLeft, Braces, CheckCircle2, ChevronDown, ChevronRight, CircleStop, Columns3, Database, FileCode2, KeyRound, LoaderCircle, Play, Plus, RefreshCw, Search, ShieldCheck, Table2, Trash2, WandSparkles, XCircle } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Braces, CheckCircle2, ChevronDown, ChevronRight, CircleStop, Columns3, Database, FileCode2, KeyRound, LoaderCircle, Play, Plus, Save, Pencil, X, RefreshCw, Search, ShieldCheck, Table2, Trash2, WandSparkles, XCircle } from "lucide-react"
 import { databasesApi, type DatabaseConnection, type DatabaseSchema, type DatabaseTable, type QueryResult } from "@/api/databases"
 import { Button } from "@/components/ui/button"
 import { navigate } from "@/router/navigation"
+
+import { useQueryTabs, isDirty } from "./use-query-tabs"
 
 type ConnectionState = "connecting" | "connected" | "error"
 type ResultTab = "result" | "message"
@@ -17,18 +19,15 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set())
   const [sidebarWidth, setSidebarWidth] = useState(270)
   const [editorHeight, setEditorHeight] = useState(310)
-  const [sql, setSQL] = useState(() => localStorage.getItem(`easyssh.database.${databaseId}.sql`) ?? "-- 在这里输入 SQL\nSELECT 1;")
-  const [result, setResult] = useState<QueryResult | null>(null)
-  const [resultTab, setResultTab] = useState<ResultTab>("result")
-  const [executing, setExecuting] = useState(false)
-  const [queryError, setQueryError] = useState("")
-  const [executedSQL, setExecutedSQL] = useState("")
+  const queries = useQueryTabs(databaseId)
+  const { sql, result, resultTab, executing, queryError, executedSQL } = queries.active
+  const setSQL = (value: string) => queries.update(queries.active.id, { sql: value })
+  const setResultTab = (value: ResultTab) => queries.update(queries.active.id, { resultTab: value })
   const editorRef = useRef<HTMLTextAreaElement>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const [queryFilter, setQueryFilter] = useState("")
 
   useEffect(() => { databasesApi.get(databaseId).then(setConnection).catch((e: Error) => { setSchemaError(e.message); setConnectionState("error") }) }, [databaseId])
-  useEffect(() => { const timer = window.setTimeout(() => localStorage.setItem(`easyssh.database.${databaseId}.sql`, sql), 300); return () => window.clearTimeout(timer) }, [databaseId, sql])
-  useEffect(() => { void refreshSchema(); return () => abortRef.current?.abort() }, [databaseId])
+  useEffect(() => { void refreshSchema() }, [databaseId])
 
   async function refreshSchema() {
     setConnectionState("connecting"); setSchemaError("")
@@ -39,12 +38,20 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
   async function execute() {
     const statement = chosenSQL(); if (!statement || executing) return
     const warning = dangerousWarning(statement); if (warning && !window.confirm(warning)) return
-    const controller = new AbortController(); abortRef.current = controller; setExecuting(true); setQueryError(""); setExecutedSQL(statement); setResultTab("result")
-    try { const data = await databasesApi.execute(databaseId, statement, Boolean(warning), controller.signal); setResult(data); setConnectionState("connected"); if (data.kind === "command") { setResultTab("message"); void refreshSchema() } }
-    catch (e) { setQueryError(controller.signal.aborted ? "查询已取消" : (e as Error).message); setResultTab("message") }
-    finally { setExecuting(false); abortRef.current = null }
+    const id = queries.active.id
+    if (queries.controllers.current.has(id)) return
+    const controller = new AbortController()
+    queries.controllers.current.set(id, controller)
+    queries.update(id, { executing: true, queryError: "", executedSQL: statement, resultTab: "result", result: null })
+    try {
+      const data = await databasesApi.execute(databaseId, statement, Boolean(warning), controller.signal)
+      queries.update(id, { result: data, resultTab: data.kind === "command" ? "message" : "result" })
+      setConnectionState("connected")
+      if (data.kind === "command") void refreshSchema()
+    } catch (e) { queries.update(id, { queryError: controller.signal.aborted ? "查询已取消" : (e as Error).message, resultTab: "message" }) }
+    finally { queries.update(id, { executing: false }); queries.controllers.current.delete(id) }
   }
-  function insertTable(schema: string, table: DatabaseTable) { setSQL(`SELECT *\nFROM ${qualifiedName(connection?.type, schema, table.name)}\nLIMIT 500;`); editorRef.current?.focus() }
+  function insertTable(schema: string, table: DatabaseTable) { queries.add(`SELECT *\nFROM ${qualifiedName(connection?.type, schema, table.name)}\nLIMIT 500;`); editorRef.current?.focus() }
   function resizeSidebar(e: React.PointerEvent) { const startX = e.clientX, start = sidebarWidth; const move = (event: PointerEvent) => setSidebarWidth(Math.min(420, Math.max(210, start + event.clientX - startX))); const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up) }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up) }
   function resizeEditor(e: React.PointerEvent) { const startY = e.clientY, start = editorHeight; const move = (event: PointerEvent) => setEditorHeight(Math.min(window.innerHeight - 260, Math.max(180, start + event.clientY - startY))); const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up) }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up) }
   const visibleSchemas = useMemo(() => filterSchemas(schemas, filter), [schemas, filter])
@@ -57,14 +64,22 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
       <div className="ml-auto flex items-center gap-2"><ConnectionBadge state={connectionState} /><Button variant="outline" size="sm" disabled={connectionState === "connecting"} onClick={() => void refreshSchema()}><RefreshCw className={connectionState === "connecting" ? "animate-spin" : ""} />刷新结构</Button></div>
     </header>
     <div className="flex min-h-0 flex-1">
-      <aside className="flex shrink-0 flex-col border-r bg-muted/10" style={{ width: sidebarWidth }}><div className="flex h-11 items-center border-b px-3"><div className="text-xs font-semibold">数据库对象</div><span className="ml-auto text-[10px] text-muted-foreground">{schemas.reduce((count, schema) => count + schema.tables.length, 0)} 张表</span></div><div className="p-2"><div className="relative"><Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" /><input className="h-8 w-full rounded-md border bg-background pr-2 pl-8 text-xs outline-none focus:ring-2 focus:ring-ring/20" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="搜索表或字段..." /></div></div><div className="min-h-0 flex-1 overflow-auto px-2 pb-3">{connectionState === "connecting" && <SidebarNotice icon={<LoaderCircle className="animate-spin" />} text="正在读取数据库结构..." />}{connectionState === "error" && <SidebarNotice icon={<XCircle />} text={schemaError || "连接失败"} />}{connectionState === "connected" && visibleSchemas.length === 0 && <SidebarNotice icon={<Search />} text="没有匹配的表或字段" />}{visibleSchemas.map((schema) => <SchemaNode key={schema.name} schema={schema} databaseType={connection?.type} forceOpen={Boolean(filter)} expandedSchemas={expandedSchemas} setExpandedSchemas={setExpandedSchemas} expandedTables={expandedTables} setExpandedTables={setExpandedTables} onOpenTable={insertTable} />)}</div></aside>
+      <aside className="flex shrink-0 flex-col border-r bg-muted/10" style={{ width: sidebarWidth }}><div className="flex h-11 items-center border-b px-3"><div className="text-xs font-semibold">数据库对象</div><span className="ml-auto text-[10px] text-muted-foreground">{schemas.reduce((count, schema) => count + schema.tables.length, 0)} 张表</span></div><div className="p-2"><div className="relative"><Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" /><input className="h-8 w-full rounded-md border bg-background pr-2 pl-8 text-xs outline-none focus:ring-2 focus:ring-ring/20" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="搜索表或字段..." /></div></div><div className="min-h-0 flex-1 overflow-auto px-2 pb-3">{connectionState === "connecting" && <SidebarNotice icon={<LoaderCircle className="animate-spin" />} text="正在读取数据库结构..." />}{connectionState === "error" && <SidebarNotice icon={<XCircle />} text={schemaError || "连接失败"} />}{connectionState === "connected" && visibleSchemas.length === 0 && <SidebarNotice icon={<Search />} text="没有匹配的表或字段" />}{visibleSchemas.map((schema) => <SchemaNode key={schema.name} schema={schema} databaseType={connection?.type} forceOpen={Boolean(filter)} expandedSchemas={expandedSchemas} setExpandedSchemas={setExpandedSchemas} expandedTables={expandedTables} setExpandedTables={setExpandedTables} onOpenTable={insertTable} />)}</div><div className="flex max-h-[40%] shrink-0 flex-col border-t p-2"><div className="px-1 py-2 text-xs font-semibold">已保存查询</div><input aria-label="搜索已保存查询" placeholder="搜索查询..." value={queryFilter} onChange={e => setQueryFilter(e.target.value)} className="mb-2 h-8 w-full rounded-md border bg-background px-2 text-xs" /><div className="min-h-0 overflow-auto">{queries.saved.filter(item => item.name.toLowerCase().includes(queryFilter.toLowerCase())).map(item => <div key={item.id} className="flex items-center gap-1 rounded hover:bg-muted"><button onClick={() => queries.open(item)} className="flex min-w-0 flex-1 items-center gap-2 p-2 text-left text-xs" title={item.name}><FileCode2 className="size-3.5 shrink-0" /><span className="truncate">{item.name}</span></button><button disabled={queries.saving} onClick={() => void queries.rename(item)} title={`重命名 ${item.name}`} className="p-1"><Pencil className="size-3" /></button><button disabled={queries.saving} onClick={() => void queries.remove(item)} title={`删除 ${item.name}`} className="p-1"><Trash2 className="size-3" /></button></div>)}{queries.saved.length === 0 && <p className="p-2 text-xs text-muted-foreground">保存常用 SQL 后，可在这里打开。</p>}</div></div></aside>
       <div className="w-1 shrink-0 cursor-col-resize bg-transparent transition hover:bg-primary/20" onPointerDown={resizeSidebar} />
       <section className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-10 shrink-0 items-end border-b bg-muted/15 px-2"><div className="flex h-9 min-w-36 items-center gap-2 rounded-t-md border border-b-background bg-background px-3 text-xs font-medium"><FileCode2 className="size-3.5 text-muted-foreground" />Query 1<span className="ml-auto size-1.5 rounded-full bg-amber-400" title="查询自动保存在本地" /></div><button className="mb-1 ml-1 rounded p-1.5 text-muted-foreground hover:bg-muted" title="后续支持多查询标签"><Plus className="size-3.5" /></button></div>
-        <div className="relative shrink-0" style={{ height: editorHeight }}><div className="absolute inset-y-0 left-0 w-12 select-none overflow-hidden border-r bg-muted/15 pt-4 text-right font-mono text-xs leading-6 text-muted-foreground/60">{sql.split("\n").map((_, index) => <div className="pr-3" key={index}>{index + 1}</div>)}</div><textarea ref={editorRef} value={sql} spellCheck={false} onChange={(e) => setSQL(e.target.value)} onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); void execute() } }} className="absolute inset-0 resize-none bg-transparent py-4 pr-5 pl-16 font-mono text-[13px] leading-6 outline-none selection:bg-blue-500/20" aria-label="SQL 编辑器" /></div>
-        <div className="flex h-11 shrink-0 items-center gap-1 border-y px-3"><Button size="sm" disabled={executing || !sql.trim()} onClick={() => void execute()}>{executing ? <LoaderCircle className="animate-spin" /> : <Play />}运行</Button><Button variant="ghost" size="sm" disabled={!executing} onClick={() => abortRef.current?.abort()}><CircleStop />停止</Button><div className="mx-1 h-5 w-px bg-border" /><Button variant="ghost" size="sm" disabled={executing} onClick={() => setSQL(formatSQL(sql))}><WandSparkles />格式化</Button><Button variant="ghost" size="sm" disabled={executing || !sql} onClick={() => setSQL("")}><Trash2 />清空</Button><div className="ml-auto text-[11px] text-muted-foreground">Ctrl / ⌘ + Enter 运行{result && <> · {result.durationMs} ms · {result.kind === "rows" ? `${result.rows.length} 行` : `影响 ${result.rowsAffected} 行`}</>}</div></div>
+        <div className="flex h-10 shrink-0 items-end border-b bg-muted/15 px-2">
+          <div role="tablist" aria-label="查询标签" className="flex min-w-0 overflow-x-auto">{queries.tabs.map(tab => <div key={tab.id} className={`flex h-9 shrink-0 items-center gap-2 rounded-t-md border px-3 text-xs ${tab.id === queries.active.id ? "border-b-background bg-background" : "border-transparent text-muted-foreground"}`}>
+            <button role="tab" aria-selected={tab.id === queries.active.id} onClick={() => queries.select(tab.id)} className="flex items-center gap-2"><FileCode2 className="size-3.5" /><span className="max-w-40 truncate">{tab.name}</span>{tab.executing ? <LoaderCircle className="size-3 animate-spin" /> : isDirty(tab) ? <span className="size-1.5 rounded-full bg-amber-400" title="尚未保存到服务器" /> : null}</button>
+            <button disabled={queries.saving} onClick={() => queries.close(tab)} title={`关闭 ${tab.name}`} className="rounded p-0.5 hover:bg-muted"><X className="size-3" /></button>
+          </div>)}</div>
+          <button onClick={() => queries.add()} className="mb-1 ml-1 shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" title="新建查询"><Plus className="size-3.5" /></button>
+        </div>
+        {queries.error && <div role="alert" className="border-b bg-red-500/10 px-3 py-2 text-xs text-red-600">{queries.error}</div>}
+
+        <div className="relative shrink-0" style={{ height: editorHeight }}><div className="absolute inset-y-0 left-0 w-12 select-none overflow-hidden border-r bg-muted/15 pt-4 text-right font-mono text-xs leading-6 text-muted-foreground/60">{sql.split("\n").map((_, index) => <div className="pr-3" key={index}>{index + 1}</div>)}</div><textarea ref={editorRef} value={sql} spellCheck={false} onChange={(e) => setSQL(e.target.value)} onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); void queries.save() } if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); void execute() } }} className="absolute inset-0 resize-none bg-transparent py-4 pr-5 pl-16 font-mono text-[13px] leading-6 outline-none selection:bg-blue-500/20" aria-label="SQL 编辑器" /></div>
+        <div className="flex h-11 shrink-0 items-center gap-1 border-y px-3"><Button size="sm" disabled={executing || !sql.trim()} onClick={() => void execute()}>{executing ? <LoaderCircle className="animate-spin" /> : <Play />}运行</Button><Button variant="ghost" size="sm" disabled={!executing} onClick={() => queries.controllers.current.get(queries.active.id)?.abort()}><CircleStop />停止</Button><div className="mx-1 h-5 w-px bg-border" /><Button variant="ghost" size="sm" disabled={executing} onClick={() => setSQL(formatSQL(sql))}><WandSparkles />格式化</Button><Button variant="ghost" size="sm" title="Ctrl / ⌘ + S 保存查询" disabled={queries.saving || !sql.trim()} onClick={() => void queries.save()}><Save />{queries.saving ? "保存中…" : "保存"}</Button><Button variant="ghost" size="sm" disabled={executing || !sql} onClick={() => setSQL("")}><Trash2 />清空</Button><div className="ml-auto text-[11px] text-muted-foreground">Ctrl / ⌘ + Enter 运行{result && <> · {result.durationMs} ms · {result.kind === "rows" ? `${result.rows.length} 行` : `影响 ${result.rowsAffected} 行`}</>}</div></div>
         <div className="h-1 shrink-0 cursor-row-resize bg-transparent transition hover:bg-primary/20" onPointerDown={resizeEditor} />
-        <div className="flex min-h-0 flex-1 flex-col"><div className="flex h-10 shrink-0 items-end border-b px-3"><ResultTabButton active={resultTab === "result"} onClick={() => setResultTab("result")}>查询结果{result?.kind === "rows" && <span className="rounded bg-muted px-1.5 text-[10px]">{result.rows.length}</span>}</ResultTabButton><ResultTabButton active={resultTab === "message"} onClick={() => setResultTab("message")}>消息{queryError && <span className="size-1.5 rounded-full bg-red-500" />}</ResultTabButton></div><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{resultTab === "result" ? <Results result={result} executing={executing} /> : <div className="h-full overflow-auto"><Messages result={result} error={queryError} sql={executedSQL} /></div>}</div></div>
+        <div className="flex min-h-0 flex-1 flex-col"><div className="flex h-10 shrink-0 items-end border-b px-3"><ResultTabButton active={resultTab === "result"} onClick={() => setResultTab("result")}>查询结果{result?.kind === "rows" && <span className="rounded bg-muted px-1.5 text-[10px]">{result.rows.length}</span>}</ResultTabButton><ResultTabButton active={resultTab === "message"} onClick={() => setResultTab("message")}>消息{queryError && <span className="size-1.5 rounded-full bg-red-500" />}</ResultTabButton></div><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{resultTab === "result" ? <Results key={queries.active.id} result={result} executing={executing} /> : <div className="h-full overflow-auto"><Messages result={result} error={queryError} sql={executedSQL} /></div>}</div></div>
       </section>
     </div>
   </div>

@@ -42,7 +42,11 @@ export type DatabaseSchemaResult = { schemas: DatabaseSchema[] }
 export type QueryColumn = { name: string; type: string }
 export type QueryResult = { kind: "rows" | "command"; columns: QueryColumn[]; rows: unknown[][]; rowsAffected: number; durationMs: number; truncated: boolean; message: string }
 
+export type SavedQuery = { id: number; databaseConnectionId: number; name: string; sql: string; createdAt: string; updatedAt: string }
 export const databasesApi = {
+  queries: (id: number) => request<SavedQuery[]>(`/databases/${id}/queries`),
+  saveQuery: (id: number, input: { name: string; sql: string }, queryId?: number) => request<SavedQuery>(`/databases/${id}/queries${queryId ? `/${queryId}` : ""}`, { method: queryId ? "PUT" : "POST", body: JSON.stringify(input) }),
+  deleteQuery: (id: number, queryId: number) => request<void>(`/databases/${id}/queries/${queryId}`, { method: "DELETE" }),
   list: () => request<DatabaseConnection[]>("/databases"),
   get: (id: number) => request<DatabaseConnection>(`/databases/${id}`),
   create: (input: DatabaseInput) => request<DatabaseConnection>("/databases", { method: "POST", body: JSON.stringify(input) }),

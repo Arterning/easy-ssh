@@ -125,7 +125,12 @@ func (a *API) deleteDatabaseConnection(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := a.db.Delete(&item).Error; err != nil {
+	if err := a.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("database_connection_id = ?", item.ID).Delete(&model.DatabaseQuery{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&item).Error
+	}); err != nil {
 		fail(w, 500, err)
 		return
 	}
