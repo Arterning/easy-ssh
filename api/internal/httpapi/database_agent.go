@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,8 +18,22 @@ type databaseAgentRequest struct {
 }
 
 type databaseAgentPlan struct {
-	Summary string `json:"summary"`
-	SQL     string `json:"sql"`
+	ID            uint      `json:"id"`
+	Question      string    `json:"question"`
+	Summary       string    `json:"summary"`
+	SQL           string    `json:"sql"`
+	Status        string    `json:"status"`
+	Answer        string    `json:"answer"`
+	ResultSummary string    `json:"resultSummary"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type databaseAgentExecuteInput struct {
+	Confirmed bool `json:"confirmed"`
+}
+type databaseAgentExecuteResponse struct {
+	Exchange databaseAgentPlan `json:"exchange"`
+	Result   executeSQLResult  `json:"result"`
 }
 
 func (a *API) generateDatabaseSQL(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +73,91 @@ func (a *API) generateDatabaseSQL(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, plan)
+	exchange := model.DatabaseAgentExchange{DatabaseID: item.ID, Question: in.Question, Summary: plan.Summary, SQL: plan.SQL, Status: "pending"}
+	if err = a.db.Create(&exchange).Error; err != nil {
+		fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, databaseAgentExchangeView(exchange))
+}
+
+func (a *API) listDatabaseAgentHistory(w http.ResponseWriter, r *http.Request) {
+	item, ok := a.findDatabaseConnection(w, r)
+	if !ok {
+		return
+	}
+	var exchanges []model.DatabaseAgentExchange
+	if err := a.db.Where("database_id = ?", item.ID).Order("created_at asc").Limit(200).Find(&exchanges).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	result := make([]databaseAgentPlan, 0, len(exchanges))
+	for _, exchange := range exchanges {
+		result = append(result, databaseAgentExchangeView(exchange))
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *API) executeDatabaseAgentSQL(w http.ResponseWriter, r *http.Request) {
+	item, ok := a.findDatabaseConnection(w, r)
+	if !ok {
+		return
+	}
+	var in databaseAgentExecuteInput
+	if !decode(w, r, &in) {
+		return
+	}
+	if !in.Confirmed {
+		writeJSON(w, http.StatusConflict, map[string]any{"message": "Agent 生成的 SQL 必须经用户确认后才能执行", "requiresConfirmation": true})
+		return
+	}
+	exchangeID, err := strconv.ParseUint(r.PathValue("exchangeId"), 10, 64)
+	if err != nil {
+		failMessage(w, 400, "invalid exchange id")
+		return
+	}
+	var exchange model.DatabaseAgentExchange
+	if err = a.db.Where("id = ? AND database_id = ?", uint(exchangeID), item.ID).First(&exchange).Error; err != nil {
+		failMessage(w, 404, "Agent 记录不存在")
+		return
+	}
+	if exchange.Status != "pending" {
+		failMessage(w, 409, "该 SQL 已处理，不能重复执行")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	db, closeFn, err := a.openDatabase(ctx, item)
+	if err != nil {
+		fail(w, 422, err)
+		return
+	}
+	defer closeFn()
+	start := time.Now()
+	result, err := runDatabaseSQL(ctx, db, exchange.SQL)
+	if err != nil {
+		exchange.Status, exchange.ResultSummary = "failed", err.Error()
+		_ = a.db.Save(&exchange).Error
+		fail(w, 422, err)
+		return
+	}
+	result.DurationMS = time.Since(start).Milliseconds()
+	exchange.Status = "executed"
+	exchange.ResultSummary = result.Message
+	answer, answerErr := a.requestDatabaseAnswer(ctx, exchange.Question, exchange.SQL, result)
+	if answerErr != nil {
+		answer = fmt.Sprintf("SQL 已执行。%s（结果总结失败：%s）", result.Message, answerErr.Error())
+	}
+	exchange.Answer = answer
+	if err = a.db.Save(&exchange).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, databaseAgentExecuteResponse{Exchange: databaseAgentExchangeView(exchange), Result: result})
+}
+
+func databaseAgentExchangeView(exchange model.DatabaseAgentExchange) databaseAgentPlan {
+	return databaseAgentPlan{ID: exchange.ID, Question: exchange.Question, Summary: exchange.Summary, SQL: exchange.SQL, Status: exchange.Status, Answer: exchange.Answer, ResultSummary: exchange.ResultSummary, CreatedAt: exchange.CreatedAt}
 }
 
 func (a *API) requestDatabaseSQL(ctx context.Context, item model.DatabaseConnection, schema databaseSchemaView, question string) (databaseAgentPlan, error) {
@@ -127,4 +226,56 @@ func (a *API) requestDatabaseSQL(ctx context.Context, item model.DatabaseConnect
 		return plan, fmt.Errorf("模型生成了无效 SQL")
 	}
 	return plan, nil
+}
+
+func (a *API) requestDatabaseAnswer(ctx context.Context, question, statement string, result executeSQLResult) (string, error) {
+	var settings model.AISettings
+	if err := a.db.First(&settings).Error; err != nil {
+		return "", fmt.Errorf("请先配置 AI 模型")
+	}
+	key, err := a.vault.Decrypt(settings.APIKeyEncrypted)
+	if err != nil || key == "" {
+		return "", fmt.Errorf("请先配置 API Key")
+	}
+	resultJSON, _ := json.Marshal(result)
+	if len(resultJSON) > 120000 {
+		resultJSON = resultJSON[:120000]
+	}
+	prompt := fmt.Sprintf("你是数据库分析助手。请根据用户问题、已执行 SQL 和实际结果，直接用中文回答用户的问题。突出结论和关键数字，不要只是复述 SQL；如果结果不足以回答，要明确说明。\n用户问题：%s\nSQL：%s\n执行结果：%s", question, statement, resultJSON)
+	payload := map[string]any{"model": settings.Model, "temperature": 0.1, "messages": []map[string]string{{"role": "user", "content": prompt}}}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(settings.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+key)
+	resp, err := (&http.Client{Timeout: 50 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var response struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", err
+	}
+	if resp.StatusCode >= 300 {
+		if response.Error != nil {
+			return "", fmt.Errorf("模型请求失败: %s", response.Error.Message)
+		}
+		return "", fmt.Errorf("模型请求失败: HTTP %d", resp.StatusCode)
+	}
+	if len(response.Choices) == 0 || strings.TrimSpace(response.Choices[0].Message.Content) == "" {
+		return "", fmt.Errorf("模型没有返回总结")
+	}
+	return strings.TrimSpace(response.Choices[0].Message.Content), nil
 }

@@ -24,3 +24,16 @@ type DatabaseConnection struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 }
+
+type DatabaseAgentExchange struct {
+	ID            uint   `gorm:"primaryKey"`
+	DatabaseID    uint   `gorm:"index;not null"`
+	Question      string `gorm:"type:text;not null"`
+	Summary       string `gorm:"type:text"`
+	SQL           string `gorm:"type:text;not null"`
+	Status        string `gorm:"size:30;not null"`
+	Answer        string `gorm:"type:text"`
+	ResultSummary string `gorm:"type:text"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
