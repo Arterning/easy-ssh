@@ -14,7 +14,15 @@ import (
 )
 
 type databaseAgentRequest struct {
-	Question string `json:"question"`
+	Question       string `json:"question"`
+	ConversationID uint   `json:"conversationId"`
+}
+
+type databaseAgentConversationView struct {
+	ID        uint      `json:"id"`
+	Title     string    `json:"title"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type databaseAgentPlan struct {
@@ -54,6 +62,10 @@ func (a *API) generateDatabaseSQL(w http.ResponseWriter, r *http.Request) {
 		failMessage(w, http.StatusBadRequest, "问题不能超过 8000 个字符")
 		return
 	}
+	conversation, ok := a.findDatabaseAgentConversation(w, item.ID, in.ConversationID)
+	if !ok {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
@@ -73,12 +85,51 @@ func (a *API) generateDatabaseSQL(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	exchange := model.DatabaseAgentExchange{DatabaseID: item.ID, Question: in.Question, Summary: plan.Summary, SQL: plan.SQL, Status: "pending"}
+	exchange := model.DatabaseAgentExchange{DatabaseID: item.ID, ConversationID: conversation.ID, Question: in.Question, Summary: plan.Summary, SQL: plan.SQL, Status: "pending"}
 	if err = a.db.Create(&exchange).Error; err != nil {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
+	updates := map[string]any{"updated_at": time.Now()}
+	if conversation.Title == "新会话" {
+		updates["title"] = truncateDatabaseAgentTitle(in.Question)
+	}
+	_ = a.db.Model(&conversation).Updates(updates).Error
 	writeJSON(w, http.StatusOK, databaseAgentExchangeView(exchange))
+}
+
+func (a *API) listDatabaseAgentConversations(w http.ResponseWriter, r *http.Request) {
+	item, ok := a.findDatabaseConnection(w, r)
+	if !ok {
+		return
+	}
+	if err := a.migrateLegacyDatabaseAgentHistory(item.ID); err != nil {
+		fail(w, 500, err)
+		return
+	}
+	var conversations []model.DatabaseAgentConversation
+	if err := a.db.Where("database_id = ?", item.ID).Order("updated_at desc").Find(&conversations).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	result := make([]databaseAgentConversationView, 0, len(conversations))
+	for _, conversation := range conversations {
+		result = append(result, databaseAgentConversationView{conversation.ID, conversation.Title, conversation.CreatedAt, conversation.UpdatedAt})
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *API) createDatabaseAgentConversation(w http.ResponseWriter, r *http.Request) {
+	item, ok := a.findDatabaseConnection(w, r)
+	if !ok {
+		return
+	}
+	conversation := model.DatabaseAgentConversation{DatabaseID: item.ID, Title: "新会话"}
+	if err := a.db.Create(&conversation).Error; err != nil {
+		fail(w, 500, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, databaseAgentConversationView{conversation.ID, conversation.Title, conversation.CreatedAt, conversation.UpdatedAt})
 }
 
 func (a *API) listDatabaseAgentHistory(w http.ResponseWriter, r *http.Request) {
@@ -86,8 +137,16 @@ func (a *API) listDatabaseAgentHistory(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	conversationID, err := strconv.ParseUint(r.PathValue("conversationId"), 10, 64)
+	if err != nil {
+		failMessage(w, 400, "invalid conversation id")
+		return
+	}
+	if _, ok = a.findDatabaseAgentConversation(w, item.ID, uint(conversationID)); !ok {
+		return
+	}
 	var exchanges []model.DatabaseAgentExchange
-	if err := a.db.Where("database_id = ?", item.ID).Order("created_at asc").Limit(200).Find(&exchanges).Error; err != nil {
+	if err := a.db.Where("database_id = ? AND conversation_id = ?", item.ID, uint(conversationID)).Order("created_at asc").Limit(200).Find(&exchanges).Error; err != nil {
 		fail(w, 500, err)
 		return
 	}
@@ -96,6 +155,40 @@ func (a *API) listDatabaseAgentHistory(w http.ResponseWriter, r *http.Request) {
 		result = append(result, databaseAgentExchangeView(exchange))
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *API) findDatabaseAgentConversation(w http.ResponseWriter, databaseID, conversationID uint) (model.DatabaseAgentConversation, bool) {
+	if conversationID == 0 {
+		failMessage(w, 400, "conversationId is required")
+		return model.DatabaseAgentConversation{}, false
+	}
+	var conversation model.DatabaseAgentConversation
+	if err := a.db.Where("id = ? AND database_id = ?", conversationID, databaseID).First(&conversation).Error; err != nil {
+		failMessage(w, 404, "Agent 会话不存在")
+		return conversation, false
+	}
+	return conversation, true
+}
+
+func (a *API) migrateLegacyDatabaseAgentHistory(databaseID uint) error {
+	var count int64
+	if err := a.db.Model(&model.DatabaseAgentExchange{}).Where("database_id = ? AND conversation_id = 0", databaseID).Count(&count).Error; err != nil || count == 0 {
+		return err
+	}
+	conversation := model.DatabaseAgentConversation{DatabaseID: databaseID, Title: "历史会话"}
+	if err := a.db.Create(&conversation).Error; err != nil {
+		return err
+	}
+	return a.db.Model(&model.DatabaseAgentExchange{}).Where("database_id = ? AND conversation_id = 0", databaseID).Update("conversation_id", conversation.ID).Error
+}
+
+func truncateDatabaseAgentTitle(value string) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) > 30 {
+		return string(runes[:30]) + "…"
+	}
+	return value
 }
 
 func (a *API) executeDatabaseAgentSQL(w http.ResponseWriter, r *http.Request) {
