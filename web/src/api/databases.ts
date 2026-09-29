@@ -41,6 +41,8 @@ export type DatabaseSchema = { name: string; tables: DatabaseTable[] }
 export type DatabaseSchemaResult = { schemas: DatabaseSchema[] }
 export type QueryColumn = { name: string; type: string }
 export type QueryResult = { kind: "rows" | "command"; columns: QueryColumn[]; rows: unknown[][]; rowsAffected: number; durationMs: number; truncated: boolean; message: string }
+export type DatabaseAgentExchange = { id: number; question: string; summary: string; sql: string; status: "pending" | "executed" | "failed" | "rejected"; answer: string; resultSummary: string; createdAt: string }
+export type DatabaseAgentExecuteResult = { exchange: DatabaseAgentExchange; result: QueryResult }
 
 export type SavedQuery = { id: number; databaseConnectionId: number; name: string; sql: string; createdAt: string; updatedAt: string }
 export const databasesApi = {
@@ -55,5 +57,8 @@ export const databasesApi = {
   test: (input: DatabaseInput) => request<ConnectionResult>("/databases/test", { method: "POST", body: JSON.stringify(input) }),
   testSaved: (id: number) => request<ConnectionResult>(`/databases/${id}/test`, { method: "POST" }),
   schema: (id: number, signal?: AbortSignal) => request<DatabaseSchemaResult>(`/databases/${id}/schema`, { signal }),
-  execute: (id: number, sql: string, confirmed: boolean, signal?: AbortSignal) => request<QueryResult>(`/databases/${id}/execute`, { method: "POST", body: JSON.stringify({ sql, confirmed }), signal }),
+  execute: (id: number, sql: string, confirmed: boolean, signal?: AbortSignal, agentGenerated = false) => request<QueryResult>(`/databases/${id}/execute`, { method: "POST", body: JSON.stringify({ sql, confirmed, agentGenerated }), signal }),
+  agentHistory: (id: number) => request<DatabaseAgentExchange[]>(`/databases/${id}/agent/history`),
+  generateSQL: (id: number, question: string) => request<DatabaseAgentExchange>(`/databases/${id}/agent/generate`, { method: "POST", body: JSON.stringify({ question }) }),
+  executeAgentSQL: (id: number, exchangeId: number) => request<DatabaseAgentExecuteResult>(`/databases/${id}/agent/exchanges/${exchangeId}/execute`, { method: "POST", body: JSON.stringify({ confirmed: true }) }),
 }

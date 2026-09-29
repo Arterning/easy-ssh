@@ -105,6 +105,9 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/databases/{id}/queries", a.databaseQueries)
 	mux.HandleFunc("PUT /api/v1/databases/{id}/queries/{queryId}", a.databaseQueries)
 	mux.HandleFunc("DELETE /api/v1/databases/{id}/queries/{queryId}", a.databaseQueries)
+	mux.HandleFunc("POST /api/v1/databases/{id}/agent/generate", a.generateDatabaseSQL)
+	mux.HandleFunc("GET /api/v1/databases/{id}/agent/history", a.listDatabaseAgentHistory)
+	mux.HandleFunc("POST /api/v1/databases/{id}/agent/exchanges/{exchangeId}/execute", a.executeDatabaseAgentSQL)
 	return cors(mux)
 }
 func (a *API) listHosts(w http.ResponseWriter, _ *http.Request) {

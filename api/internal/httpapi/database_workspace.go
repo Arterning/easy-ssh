@@ -36,8 +36,9 @@ type databaseColumn struct {
 }
 
 type executeSQLInput struct {
-	SQL       string `json:"sql"`
-	Confirmed bool   `json:"confirmed"`
+	SQL            string `json:"sql"`
+	Confirmed      bool   `json:"confirmed"`
+	AgentGenerated bool   `json:"agentGenerated"`
 }
 
 type queryColumn struct {
@@ -96,6 +97,10 @@ func (a *API) executeDatabaseSQL(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(in.SQL) > 1<<20 {
 		failMessage(w, http.StatusBadRequest, "SQL 不能超过 1 MB")
+		return
+	}
+	if in.AgentGenerated && !in.Confirmed {
+		writeJSON(w, http.StatusConflict, map[string]any{"message": "Agent 生成的 SQL 必须经用户确认后才能执行", "requiresConfirmation": true})
 		return
 	}
 	if warning := dangerousSQLWarning(in.SQL); warning != "" && !in.Confirmed {

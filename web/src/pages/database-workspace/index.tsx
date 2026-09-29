@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, ArrowLeft, Braces, CheckCircle2, ChevronDown, ChevronRight, CircleStop, Columns3, Database, FileCode2, KeyRound, LoaderCircle, Play, Plus, Save, Pencil, X, RefreshCw, Search, ShieldCheck, Table2, Trash2, WandSparkles, XCircle } from "lucide-react"
-import { databasesApi, type DatabaseConnection, type DatabaseSchema, type DatabaseTable, type QueryResult } from "@/api/databases"
+import { AlertTriangle, ArrowLeft, Bot, Braces, CheckCircle2, ChevronDown, ChevronRight, CircleStop, Columns3, Database, FileCode2, KeyRound, LoaderCircle, PanelRightClose, PanelRightOpen, Pencil, Play, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, Table2, Trash2, WandSparkles, X, XCircle } from "lucide-react"
+import { databasesApi, type DatabaseAgentExchange, type DatabaseConnection, type DatabaseSchema, type DatabaseTable, type QueryResult } from "@/api/databases"
 import { Button } from "@/components/ui/button"
+import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { navigate } from "@/router/navigation"
 
 import { useQueryTabs, isDirty } from "./use-query-tabs"
@@ -23,6 +24,8 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
   const { sql, result, resultTab, executing, queryError, executedSQL } = queries.active
   const setSQL = (value: string) => queries.update(queries.active.id, { sql: value })
   const setResultTab = (value: ResultTab) => queries.update(queries.active.id, { resultTab: value })
+  const [agentOpen, setAgentOpen] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const [queryFilter, setQueryFilter] = useState("")
 
@@ -51,6 +54,22 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
     } catch (e) { queries.update(id, { queryError: controller.signal.aborted ? "查询已取消" : (e as Error).message, resultTab: "message" }) }
     finally { queries.update(id, { executing: false }); queries.controllers.current.delete(id) }
   }
+  async function executeAgentSQL(exchange: DatabaseAgentExchange) {
+    if (!exchange.sql.trim() || executing) return null
+    const id = queries.active.id
+    setSQL(exchange.sql)
+    queries.update(id, { executing: true, queryError: "", executedSQL: exchange.sql, resultTab: "result", result: null })
+    try {
+      const data = await databasesApi.executeAgentSQL(databaseId, exchange.id)
+      queries.update(id, { result: data.result, resultTab: data.result.kind === "command" ? "message" : "result" })
+      setConnectionState("connected")
+      if (data.result.kind === "command") void refreshSchema()
+      return data.exchange
+    } catch (e) {
+      queries.update(id, { queryError: (e as Error).message, resultTab: "message" })
+      return null
+    } finally { queries.update(id, { executing: false }) }
+  }
   function insertTable(schema: string, table: DatabaseTable) { queries.add(`SELECT *\nFROM ${qualifiedName(connection?.type, schema, table.name)}\nLIMIT 500;`); editorRef.current?.focus() }
   function resizeSidebar(e: React.PointerEvent) { const startX = e.clientX, start = sidebarWidth; const move = (event: PointerEvent) => setSidebarWidth(Math.min(420, Math.max(210, start + event.clientX - startX))); const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up) }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up) }
   function resizeEditor(e: React.PointerEvent) { const startY = e.clientY, start = editorHeight; const move = (event: PointerEvent) => setEditorHeight(Math.min(window.innerHeight - 260, Math.max(180, start + event.clientY - startY))); const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up) }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up) }
@@ -61,7 +80,7 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
       <Button variant="ghost" size="icon-sm" title="返回数据库列表" onClick={() => navigate("/databases")}><ArrowLeft /></Button><div className="h-5 w-px bg-border" /><div className="grid size-8 place-items-center rounded-lg bg-foreground text-background"><Database className="size-4" /></div>
       <div className="min-w-0"><div className="flex items-center gap-2"><span className="truncate text-sm font-semibold">{connection?.name ?? "数据库工作台"}</span>{connection && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">{connection.type === "postgres" ? "PostgreSQL" : connection.type}</span>}</div><div className="max-w-[420px] truncate text-[11px] text-muted-foreground">{connectionAddress(connection)}</div></div>
       {connection?.useSshTunnel && <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground"><ShieldCheck className="size-3" />SSH 隧道</span>}
-      <div className="ml-auto flex items-center gap-2"><ConnectionBadge state={connectionState} /><Button variant="outline" size="sm" disabled={connectionState === "connecting"} onClick={() => void refreshSchema()}><RefreshCw className={connectionState === "connecting" ? "animate-spin" : ""} />刷新结构</Button></div>
+      <div className="ml-auto flex items-center gap-2"><ConnectionBadge state={connectionState} /><Button variant="outline" size="sm" disabled={connectionState === "connecting"} onClick={() => void refreshSchema()}><RefreshCw className={connectionState === "connecting" ? "animate-spin" : ""} />刷新结构</Button><Button variant="ghost" size="icon-sm" title={agentOpen ? "折叠 Agent" : "打开 Agent"} onClick={() => setAgentOpen((value) => !value)}>{agentOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button><Button variant="ghost" size="icon-sm" title="AI 设置" onClick={() => setSettingsOpen(true)}><Settings /></Button></div>
     </header>
     <div className="flex min-h-0 flex-1">
       <aside className="flex shrink-0 flex-col border-r bg-muted/10" style={{ width: sidebarWidth }}><div className="flex h-11 items-center border-b px-3"><div className="text-xs font-semibold">数据库对象</div><span className="ml-auto text-[10px] text-muted-foreground">{schemas.reduce((count, schema) => count + schema.tables.length, 0)} 张表</span></div><div className="p-2"><div className="relative"><Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" /><input className="h-8 w-full rounded-md border bg-background pr-2 pl-8 text-xs outline-none focus:ring-2 focus:ring-ring/20" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="搜索表或字段..." /></div></div><div className="min-h-0 flex-1 overflow-auto px-2 pb-3">{connectionState === "connecting" && <SidebarNotice icon={<LoaderCircle className="animate-spin" />} text="正在读取数据库结构..." />}{connectionState === "error" && <SidebarNotice icon={<XCircle />} text={schemaError || "连接失败"} />}{connectionState === "connected" && visibleSchemas.length === 0 && <SidebarNotice icon={<Search />} text="没有匹配的表或字段" />}{visibleSchemas.map((schema) => <SchemaNode key={schema.name} schema={schema} databaseType={connection?.type} forceOpen={Boolean(filter)} expandedSchemas={expandedSchemas} setExpandedSchemas={setExpandedSchemas} expandedTables={expandedTables} setExpandedTables={setExpandedTables} onOpenTable={insertTable} />)}</div><div className="flex max-h-[40%] shrink-0 flex-col border-t p-2"><div className="px-1 py-2 text-xs font-semibold">已保存查询</div><input aria-label="搜索已保存查询" placeholder="搜索查询..." value={queryFilter} onChange={e => setQueryFilter(e.target.value)} className="mb-2 h-8 w-full rounded-md border bg-background px-2 text-xs" /><div className="min-h-0 overflow-auto">{queries.saved.filter(item => item.name.toLowerCase().includes(queryFilter.toLowerCase())).map(item => <div key={item.id} className="flex items-center gap-1 rounded hover:bg-muted"><button onClick={() => queries.open(item)} className="flex min-w-0 flex-1 items-center gap-2 p-2 text-left text-xs" title={item.name}><FileCode2 className="size-3.5 shrink-0" /><span className="truncate">{item.name}</span></button><button disabled={queries.saving} onClick={() => void queries.rename(item)} title={`重命名 ${item.name}`} className="p-1"><Pencil className="size-3" /></button><button disabled={queries.saving} onClick={() => void queries.remove(item)} title={`删除 ${item.name}`} className="p-1"><Trash2 className="size-3" /></button></div>)}{queries.saved.length === 0 && <p className="p-2 text-xs text-muted-foreground">保存常用 SQL 后，可在这里打开。</p>}</div></div></aside>
@@ -81,8 +100,42 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
         <div className="h-1 shrink-0 cursor-row-resize bg-transparent transition hover:bg-primary/20" onPointerDown={resizeEditor} />
         <div className="flex min-h-0 flex-1 flex-col"><div className="flex h-10 shrink-0 items-end border-b px-3"><ResultTabButton active={resultTab === "result"} onClick={() => setResultTab("result")}>查询结果{result?.kind === "rows" && <span className="rounded bg-muted px-1.5 text-[10px]">{result.rows.length}</span>}</ResultTabButton><ResultTabButton active={resultTab === "message"} onClick={() => setResultTab("message")}>消息{queryError && <span className="size-1.5 rounded-full bg-red-500" />}</ResultTabButton></div><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{resultTab === "result" ? <Results key={queries.active.id} result={result} executing={executing} /> : <div className="h-full overflow-auto"><Messages result={result} error={queryError} sql={executedSQL} /></div>}</div></div>
       </section>
+      {agentOpen && <DatabaseAgentPanel databaseId={databaseId} executing={executing} onInsert={(value) => { setSQL(value); editorRef.current?.focus() }} onExecute={executeAgentSQL} />}
     </div>
+    {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
   </div>
+}
+
+function DatabaseAgentPanel({ databaseId, executing, onInsert, onExecute }: { databaseId: number; executing: boolean; onInsert: (sql: string) => void; onExecute: (exchange: DatabaseAgentExchange) => Promise<DatabaseAgentExchange | null> }) {
+  const [question, setQuestion] = useState("")
+  const [items, setItems] = useState<DatabaseAgentExchange[]>([])
+  const [working, setWorking] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [pendingQuestion, setPendingQuestion] = useState("")
+  const [error, setError] = useState("")
+  const endRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { setLoading(true); databasesApi.agentHistory(databaseId).then(setItems).catch((e: Error) => setError(e.message)).finally(() => setLoading(false)) }, [databaseId])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }) }, [items, pendingQuestion, working])
+  async function submit() {
+    const value = question.trim(); if (!value || working) return
+    setWorking(true); setError(""); setQuestion(""); setPendingQuestion(value)
+    try { const exchange = await databasesApi.generateSQL(databaseId, value); setItems((current) => [...current, exchange]) }
+    catch (e) { setQuestion(value); setError((e as Error).message) }
+    finally { setPendingQuestion(""); setWorking(false) }
+  }
+  function updateItem(index: number, next: DatabaseAgentExchange) { setItems((current) => current.map((item, itemIndex) => itemIndex === index ? next : item)) }
+  async function approve(item: DatabaseAgentExchange, index: number) { if (working || executing) return; setWorking(true); setError(""); const next = await onExecute(item); if (next) updateItem(index, next); else { try { setItems(await databasesApi.agentHistory(databaseId)) } catch { /* execution error is shown in the main result pane */ } }; setWorking(false) }
+  return <aside className="flex w-[400px] shrink-0 flex-col border-l bg-muted/10">
+    <div className="flex h-11 items-center gap-2 border-b px-3 text-xs font-semibold"><Bot className="size-4 text-violet-500" />数据库 Agent<span className="ml-auto rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700">执行前需确认</span></div>
+    <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      {loading ? <div className="grid h-full place-items-center"><LoaderCircle className="size-4 animate-spin text-muted-foreground" /></div> : items.length === 0 && !pendingQuestion ? <div className="grid h-full place-items-center px-8 text-center"><div><div className="mx-auto grid size-11 place-items-center rounded-xl bg-violet-500/10"><Bot className="size-5 text-violet-500" /></div><h3 className="mt-4 text-sm font-medium">让 Agent 帮你写 SQL</h3><p className="mt-2 text-xs leading-5 text-muted-foreground">Agent 会参考当前数据库结构生成 SQL。生成结果不会自动执行，必须由你确认。</p></div></div> : <div className="space-y-5">{items.map((item, index) => <div key={item.id} className="space-y-3"><div className="flex justify-end"><div className="max-w-[90%] rounded-xl bg-violet-600 px-3 py-2 text-xs whitespace-pre-wrap text-white">{item.question}</div></div><div className="rounded-xl border bg-background p-3 text-xs"><div className="text-muted-foreground">{item.summary}</div><pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-muted p-3 font-mono text-[11px] whitespace-pre-wrap text-foreground">{item.sql}</pre>{item.status === "pending" ? <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5"><div className="flex items-start gap-2 text-[11px] text-amber-700"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" />请检查 SQL。点击确认后才会发送到数据库执行。</div><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void approve(item, index)} disabled={working || executing}><Play />确认并执行</Button><Button size="sm" variant="outline" onClick={() => onInsert(item.sql)} disabled={working || executing}>仅放入编辑器</Button></div></div> : item.status === "executed" ? <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><CheckCircle2 className="size-3.5" />Agent 回答</div><div className="text-xs leading-5 whitespace-pre-wrap text-foreground">{item.answer || item.resultSummary}</div></div> : <div className="mt-3 rounded-lg bg-red-500/5 p-2.5 text-[11px] text-red-600">执行失败：{item.resultSummary}</div>}</div></div>)}</div>}
+      {pendingQuestion && <div className="mt-5 flex justify-end"><div className="max-w-[90%] rounded-xl bg-violet-600 px-3 py-2 text-xs whitespace-pre-wrap text-white">{pendingQuestion}</div></div>}
+      {working && <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" />Agent 正在分析数据库结构…</div>}
+      {error && <div className="mt-3 rounded-lg bg-red-500/10 p-3 text-xs text-red-600">{error}</div>}
+      <div ref={endRef} />
+    </div>
+    <div className="border-t p-3"><div className="relative"><textarea value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit() } }} disabled={working} className="h-24 w-full resize-none rounded-lg border bg-background p-3 pr-10 text-xs outline-none focus:ring-2 focus:ring-ring/20 disabled:opacity-60" placeholder="描述你想查询或修改的数据，Enter 发送…" /><button onClick={() => void submit()} disabled={working || !question.trim()} className="absolute right-2.5 bottom-2.5 grid size-7 place-items-center rounded-md bg-violet-600 text-white disabled:opacity-40">{working ? <LoaderCircle className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}</button></div></div>
+  </aside>
 }
 
 function SchemaNode({ schema, databaseType, forceOpen, expandedSchemas, setExpandedSchemas, expandedTables, setExpandedTables, onOpenTable }: { schema: DatabaseSchema; databaseType?: string; forceOpen: boolean; expandedSchemas: Set<string>; setExpandedSchemas: (value: Set<string>) => void; expandedTables: Set<string>; setExpandedTables: (value: Set<string>) => void; onOpenTable: (schema: string, table: DatabaseTable) => void }) {

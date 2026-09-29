@@ -2,3 +2,6 @@
 /easyssh
 /data/
 .cache
+
+*.exe
+*.exe~
