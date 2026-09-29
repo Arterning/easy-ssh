@@ -29,12 +29,15 @@ type DatabaseAgentExchange struct {
 	ID             uint   `gorm:"primaryKey"`
 	DatabaseID     uint   `gorm:"index;not null"`
 	ConversationID uint   `gorm:"index;not null;default:0"`
+	TurnID         string `gorm:"size:80;index"`
+	Step           int    `gorm:"not null;default:1"`
 	Question       string `gorm:"type:text;not null"`
 	Summary        string `gorm:"type:text"`
 	SQL            string `gorm:"type:text;not null"`
 	Status         string `gorm:"size:30;not null"`
 	Answer         string `gorm:"type:text"`
 	ResultSummary  string `gorm:"type:text"`
+	ResultJSON     string `gorm:"type:text"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }

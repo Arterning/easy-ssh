@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, ArrowLeft, Bot, Braces, CheckCircle2, ChevronDown, ChevronRight, CircleStop, Columns3, Database, FileCode2, KeyRound, LoaderCircle, PanelRightClose, PanelRightOpen, Pencil, Play, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, Table2, Trash2, WandSparkles, X, XCircle } from "lucide-react"
-import { databasesApi, type DatabaseAgentConversation, type DatabaseAgentExchange, type DatabaseConnection, type DatabaseSchema, type DatabaseTable, type QueryResult } from "@/api/databases"
+import { databasesApi, type DatabaseAgentConversation, type DatabaseAgentExchange, type DatabaseAgentExecuteResult, type DatabaseConnection, type DatabaseSchema, type DatabaseTable, type QueryResult } from "@/api/databases"
 import { Button } from "@/components/ui/button"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { navigate } from "@/router/navigation"
@@ -64,7 +64,7 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
       queries.update(id, { result: data.result, resultTab: data.result.kind === "command" ? "message" : "result" })
       setConnectionState("connected")
       if (data.result.kind === "command") void refreshSchema()
-      return data.exchange
+      return data
     } catch (e) {
       queries.update(id, { queryError: (e as Error).message, resultTab: "message" })
       return null
@@ -106,7 +106,7 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
   </div>
 }
 
-function DatabaseAgentPanel({ databaseId, executing, onInsert, onExecute }: { databaseId: number; executing: boolean; onInsert: (sql: string) => void; onExecute: (exchange: DatabaseAgentExchange) => Promise<DatabaseAgentExchange | null> }) {
+function DatabaseAgentPanel({ databaseId, executing, onInsert, onExecute }: { databaseId: number; executing: boolean; onInsert: (sql: string) => void; onExecute: (exchange: DatabaseAgentExchange) => Promise<DatabaseAgentExecuteResult | null> }) {
   const [question, setQuestion] = useState("")
   const [items, setItems] = useState<DatabaseAgentExchange[]>([])
   const [conversations, setConversations] = useState<DatabaseAgentConversation[]>([])
@@ -145,8 +145,14 @@ function DatabaseAgentPanel({ databaseId, executing, onInsert, onExecute }: { da
     catch (e) { setQuestion(value); setError((e as Error).message) }
     finally { setPendingQuestion(""); setWorking(false) }
   }
-  function updateItem(index: number, next: DatabaseAgentExchange) { setItems((current) => current.map((item, itemIndex) => itemIndex === index ? next : item)) }
-  async function approve(item: DatabaseAgentExchange, index: number) { if (working || executing) return; setWorking(true); setError(""); const next = await onExecute(item); if (next) updateItem(index, next); else { try { setItems(await databasesApi.agentHistory(databaseId, conversationId)) } catch { /* execution error is shown in the main result pane */ } }; setWorking(false) }
+  async function approve(item: DatabaseAgentExchange, index: number) {
+    if (working || executing) return
+    setWorking(true); setError("")
+    const response = await onExecute(item)
+    if (response) setItems((current) => current.flatMap((entry, itemIndex) => itemIndex === index ? [response.exchange, ...(response.next ? [response.next] : [])] : [entry]))
+    else { try { setItems(await databasesApi.agentHistory(databaseId, conversationId)) } catch { /* execution error is shown in the main result pane */ } }
+    setWorking(false)
+  }
   async function createConversation() {
     if (working) return
     setWorking(true); setError("")
@@ -157,7 +163,7 @@ function DatabaseAgentPanel({ databaseId, executing, onInsert, onExecute }: { da
   return <aside className="flex w-[400px] shrink-0 flex-col border-l bg-muted/10">
     <div className="flex h-11 items-center gap-2 border-b px-3 text-xs font-semibold"><Bot className="size-4 shrink-0 text-violet-500" /><select aria-label="Agent 会话" value={conversationId || ""} onChange={(e) => setConversationId(Number(e.target.value))} disabled={working || conversations.length === 0} className="min-w-0 flex-1 bg-transparent font-medium outline-none">{conversations.map((conversation) => <option key={conversation.id} value={conversation.id} className="bg-background">{conversation.title}</option>)}</select><button title="新建会话" onClick={() => void createConversation()} disabled={working} className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-50"><Plus className="size-3.5" /></button><span className="rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium whitespace-nowrap text-amber-700">执行前需确认</span></div>
     <div className="min-h-0 flex-1 overflow-y-auto p-4">
-      {loading ? <div className="grid h-full place-items-center"><LoaderCircle className="size-4 animate-spin text-muted-foreground" /></div> : items.length === 0 && !pendingQuestion ? <div className="grid h-full place-items-center px-8 text-center"><div><div className="mx-auto grid size-11 place-items-center rounded-xl bg-violet-500/10"><Bot className="size-5 text-violet-500" /></div><h3 className="mt-4 text-sm font-medium">让 Agent 帮你写 SQL</h3><p className="mt-2 text-xs leading-5 text-muted-foreground">Agent 会参考当前数据库结构生成 SQL。生成结果不会自动执行，必须由你确认。</p></div></div> : <div className="space-y-5">{items.map((item, index) => <div key={item.id} className="space-y-3"><div className="flex justify-end"><div className="max-w-[90%] rounded-xl bg-violet-600 px-3 py-2 text-xs whitespace-pre-wrap text-white">{item.question}</div></div><div className="rounded-xl border bg-background p-3 text-xs"><div className="text-muted-foreground">{item.summary}</div><pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-muted p-3 font-mono text-[11px] whitespace-pre-wrap text-foreground">{item.sql}</pre>{item.status === "pending" ? <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5"><div className="flex items-start gap-2 text-[11px] text-amber-700"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" />请检查 SQL。点击确认后才会发送到数据库执行。</div><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void approve(item, index)} disabled={working || executing}><Play />确认并执行</Button><Button size="sm" variant="outline" onClick={() => onInsert(item.sql)} disabled={working || executing}>仅放入编辑器</Button></div></div> : item.status === "executed" ? <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><CheckCircle2 className="size-3.5" />Agent 回答</div><div className="text-xs leading-5 whitespace-pre-wrap text-foreground">{item.answer || item.resultSummary}</div></div> : <div className="mt-3 rounded-lg bg-red-500/5 p-2.5 text-[11px] text-red-600">执行失败：{item.resultSummary}</div>}</div></div>)}</div>}
+      {loading ? <div className="grid h-full place-items-center"><LoaderCircle className="size-4 animate-spin text-muted-foreground" /></div> : items.length === 0 && !pendingQuestion ? <div className="grid h-full place-items-center px-8 text-center"><div><div className="mx-auto grid size-11 place-items-center rounded-xl bg-violet-500/10"><Bot className="size-5 text-violet-500" /></div><h3 className="mt-4 text-sm font-medium">让 Agent 帮你分析数据</h3><p className="mt-2 text-xs leading-5 text-muted-foreground">Agent 会结合会话历史和数据库结构逐步查询。每一条 SQL 都必须由你确认。</p></div></div> : <div className="space-y-5">{items.map((item, index) => <div key={item.id} className="space-y-3">{item.question && <div className="flex justify-end"><div className="max-w-[90%] rounded-xl bg-violet-600 px-3 py-2 text-xs whitespace-pre-wrap text-white">{item.question}</div></div>}<div className="rounded-xl border bg-background p-3 text-xs">{item.summary && <div className="text-muted-foreground">{item.summary}</div>}{item.sql && <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-muted p-3 font-mono text-[11px] whitespace-pre-wrap text-foreground">{item.sql}</pre>}{item.status === "pending" ? <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5"><div className="flex items-start gap-2 text-[11px] text-amber-700"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" />请检查 SQL。点击确认后才会发送到数据库执行。</div><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void approve(item, index)} disabled={working || executing}><Play />确认并执行</Button><Button size="sm" variant="outline" onClick={() => onInsert(item.sql)} disabled={working || executing}>仅放入编辑器</Button></div></div> : item.status === "executed" ? <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><CheckCircle2 className="size-3.5" />{item.answer ? "Agent 回答" : "查询步骤完成"}</div><div className="text-xs leading-5 whitespace-pre-wrap text-foreground">{item.answer || item.resultSummary}</div></div> : <div className="mt-3 rounded-lg bg-red-500/5 p-2.5 text-[11px] text-red-600">执行失败：{item.resultSummary}</div>}</div></div>)}</div>}
       {pendingQuestion && <div className="mt-5 flex justify-end"><div className="max-w-[90%] rounded-xl bg-violet-600 px-3 py-2 text-xs whitespace-pre-wrap text-white">{pendingQuestion}</div></div>}
       {working && <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" />Agent 正在分析数据库结构…</div>}
       {error && <div className="mt-3 rounded-lg bg-red-500/10 p-3 text-xs text-red-600">{error}</div>}

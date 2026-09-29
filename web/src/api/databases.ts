@@ -43,7 +43,7 @@ export type QueryColumn = { name: string; type: string }
 export type QueryResult = { kind: "rows" | "command"; columns: QueryColumn[]; rows: unknown[][]; rowsAffected: number; durationMs: number; truncated: boolean; message: string }
 export type DatabaseAgentExchange = { id: number; question: string; summary: string; sql: string; status: "pending" | "executed" | "failed" | "rejected"; answer: string; resultSummary: string; createdAt: string }
 export type DatabaseAgentConversation = { id: number; title: string; createdAt: string; updatedAt: string }
-export type DatabaseAgentExecuteResult = { exchange: DatabaseAgentExchange; result: QueryResult }
+export type DatabaseAgentExecuteResult = { exchange: DatabaseAgentExchange; next?: DatabaseAgentExchange; result: QueryResult }
 
 export type SavedQuery = { id: number; databaseConnectionId: number; name: string; sql: string; createdAt: string; updatedAt: string }
 export const databasesApi = {
