@@ -41,6 +41,7 @@ export type DatabaseSchema = { name: string; tables: DatabaseTable[] }
 export type DatabaseSchemaResult = { schemas: DatabaseSchema[] }
 export type QueryColumn = { name: string; type: string }
 export type QueryResult = { kind: "rows" | "command"; columns: QueryColumn[]; rows: unknown[][]; rowsAffected: number; durationMs: number; truncated: boolean; message: string }
+export type DatabaseAgentPlan = { summary: string; sql: string }
 
 export const databasesApi = {
   list: () => request<DatabaseConnection[]>("/databases"),
@@ -51,5 +52,6 @@ export const databasesApi = {
   test: (input: DatabaseInput) => request<ConnectionResult>("/databases/test", { method: "POST", body: JSON.stringify(input) }),
   testSaved: (id: number) => request<ConnectionResult>(`/databases/${id}/test`, { method: "POST" }),
   schema: (id: number, signal?: AbortSignal) => request<DatabaseSchemaResult>(`/databases/${id}/schema`, { signal }),
-  execute: (id: number, sql: string, confirmed: boolean, signal?: AbortSignal) => request<QueryResult>(`/databases/${id}/execute`, { method: "POST", body: JSON.stringify({ sql, confirmed }), signal }),
+  execute: (id: number, sql: string, confirmed: boolean, signal?: AbortSignal, agentGenerated = false) => request<QueryResult>(`/databases/${id}/execute`, { method: "POST", body: JSON.stringify({ sql, confirmed, agentGenerated }), signal }),
+  generateSQL: (id: number, question: string) => request<DatabaseAgentPlan>(`/databases/${id}/agent/generate`, { method: "POST", body: JSON.stringify({ question }) }),
 }
