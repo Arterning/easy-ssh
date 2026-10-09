@@ -95,12 +95,10 @@ export function RemoteFileBrowser({
     window.addEventListener("pointerdown", close)
     window.addEventListener("blur", close)
     window.addEventListener("keydown", escape)
-    window.addEventListener("scroll", close, true)
     return () => {
       window.removeEventListener("pointerdown", close)
       window.removeEventListener("blur", close)
       window.removeEventListener("keydown", escape)
-      window.removeEventListener("scroll", close, true)
     }
   }, [contextMenu])
   useEffect(() => {
