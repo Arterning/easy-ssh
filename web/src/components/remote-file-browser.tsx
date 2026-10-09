@@ -211,8 +211,7 @@ export function RemoteFileBrowser({
   }
   function open(entry: RemoteEntry) {
     if (entry.type === "directory") void loadDirectory(entry.path)
-    else if (entry.type === "file")
-      window.location.assign(filesApi.downloadUrl(hostId, entry.path))
+    else if (entry.type === "file") onEdit?.(entry)
   }
   function download(entry: RemoteEntry) {
     window.location.assign(filesApi.downloadUrl(hostId, entry.path))
