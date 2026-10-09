@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"easyssh/api/internal/model"
 	"github.com/pkg/sftp"
@@ -19,6 +21,20 @@ import (
 )
 
 const maxUploadSize int64 = 2 << 30
+const maxEditableFileSize int64 = 2 << 20
+
+type remoteFileContent struct {
+	Path       string    `json:"path"`
+	Content    string    `json:"content"`
+	Size       int64     `json:"size"`
+	ModifiedAt time.Time `json:"modifiedAt"`
+}
+
+type saveRemoteFileInput struct {
+	Content            string `json:"content"`
+	ExpectedModifiedAt string `json:"expectedModifiedAt"`
+	Force              bool   `json:"force"`
+}
 
 type remoteFileView struct {
 	Name       string    `json:"name"`
@@ -139,6 +155,132 @@ func (a *API) downloadRemoteFile(w http.ResponseWriter, r *http.Request) {
 	if _, err = io.Copy(w, file); err != nil {
 		return
 	}
+}
+
+func (a *API) readRemoteFileContent(w http.ResponseWriter, r *http.Request) {
+	host, ok := a.find(w, r)
+	if !ok {
+		return
+	}
+	target := cleanRemotePath(r.URL.Query().Get("path"))
+	sshClient, client, err := a.openSFTP(host)
+	if err != nil {
+		failMessage(w, 422, err.Error())
+		return
+	}
+	defer sshClient.Close()
+	defer client.Close()
+	info, err := client.Stat(target)
+	if err != nil {
+		failMessage(w, 404, "Remote file was not found")
+		return
+	}
+	if !info.Mode().IsRegular() {
+		failMessage(w, 400, "Only regular files can be edited")
+		return
+	}
+	if info.Size() > maxEditableFileSize {
+		failMessage(w, 413, "Files larger than 2 MB cannot be edited")
+		return
+	}
+	file, err := client.Open(target)
+	if err != nil {
+		failMessage(w, 422, safeSFTPError(err, "Could not open the remote file"))
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxEditableFileSize+1))
+	if err != nil {
+		failMessage(w, 422, "Could not read the remote file")
+		return
+	}
+	if int64(len(data)) > maxEditableFileSize {
+		failMessage(w, 413, "Files larger than 2 MB cannot be edited")
+		return
+	}
+	if !utf8.Valid(data) || strings.IndexByte(string(data), 0) >= 0 {
+		failMessage(w, 415, "Binary or non-UTF-8 files cannot be edited")
+		return
+	}
+	writeJSON(w, 200, remoteFileContent{target, string(data), int64(len(data)), info.ModTime()})
+}
+
+func (a *API) saveRemoteFileContent(w http.ResponseWriter, r *http.Request) {
+	host, ok := a.find(w, r)
+	if !ok {
+		return
+	}
+	target := cleanRemotePath(r.URL.Query().Get("path"))
+	var in saveRemoteFileInput
+	// JSON escaping can expand valid UTF-8 text substantially; the decoded content
+	// is still independently capped at maxEditableFileSize below.
+	r.Body = http.MaxBytesReader(w, r.Body, 13<<20)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		failMessage(w, 400, "Invalid file content")
+		return
+	}
+	if int64(len([]byte(in.Content))) > maxEditableFileSize {
+		failMessage(w, 413, "Files larger than 2 MB cannot be edited")
+		return
+	}
+	if strings.IndexByte(in.Content, 0) >= 0 || !utf8.ValidString(in.Content) {
+		failMessage(w, 415, "Binary or non-UTF-8 files cannot be edited")
+		return
+	}
+	expected, err := time.Parse(time.RFC3339Nano, in.ExpectedModifiedAt)
+	if err != nil && !in.Force {
+		failMessage(w, 400, "A valid expectedModifiedAt value is required")
+		return
+	}
+	sshClient, client, err := a.openSFTP(host)
+	if err != nil {
+		failMessage(w, 422, err.Error())
+		return
+	}
+	defer sshClient.Close()
+	defer client.Close()
+	info, err := client.Stat(target)
+	if err != nil {
+		failMessage(w, 404, "Remote file was not found")
+		return
+	}
+	if !info.Mode().IsRegular() {
+		failMessage(w, 400, "Only regular files can be edited")
+		return
+	}
+	if !in.Force && !info.ModTime().Equal(expected) {
+		failMessage(w, 409, "The remote file has changed since it was opened")
+		return
+	}
+	temp := fmt.Sprintf("%s.easyssh-edit-%d", target, time.Now().UnixNano())
+	file, err := client.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	if err != nil {
+		failMessage(w, 422, safeSFTPError(err, "Could not create a temporary remote file"))
+		return
+	}
+	_, writeErr := io.WriteString(file, in.Content)
+	closeErr := file.Close()
+	if writeErr != nil || closeErr != nil {
+		_ = client.Remove(temp)
+		failMessage(w, 422, "Saving the remote file was interrupted")
+		return
+	}
+	if err = client.Chmod(temp, info.Mode()); err != nil {
+		_ = client.Remove(temp)
+		failMessage(w, 422, "Could not preserve the remote file permissions")
+		return
+	}
+	if err = replaceRemoteFile(client, temp, target); err != nil {
+		_ = client.Remove(temp)
+		failMessage(w, 422, "Could not finalize the remote file")
+		return
+	}
+	updated, err := client.Stat(target)
+	if err != nil {
+		failMessage(w, 422, "The file was saved but its metadata could not be read")
+		return
+	}
+	writeJSON(w, 200, remoteFileContent{target, in.Content, int64(len([]byte(in.Content))), updated.ModTime()})
 }
 
 func (a *API) deleteRemoteFile(w http.ResponseWriter, r *http.Request) {

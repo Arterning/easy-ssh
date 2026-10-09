@@ -29,10 +29,12 @@ import {
   type ToolCall,
 } from "@/api/assistant"
 import { API_BASE } from "@/api/client"
+import type { RemoteEntry } from "@/api/files"
 import { Button } from "@/components/ui/button"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { Markdown } from "@/components/markdown"
 import { RemoteFileBrowser } from "@/components/remote-file-browser"
+import { RemoteFileEditor } from "@/components/remote-file-editor"
 import { navigate } from "@/router/navigation"
 
 type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
@@ -47,6 +49,18 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
   const [error, setError] = useState("")
   const [agentOpen, setAgentOpen] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [editingFile, setEditingFile] = useState<RemoteEntry | null>(null)
+  const [fileDirty, setFileDirty] = useState(false)
+
+  function editFile(entry: RemoteEntry) {
+    if (
+      editingFile?.path !== entry.path &&
+      fileDirty &&
+      !window.confirm("当前文件有未保存的修改，确定打开其他文件吗？")
+    )
+      return
+    setEditingFile(entry)
+  }
 
   useEffect(() => {
     hostsApi
@@ -238,7 +252,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
       <div className="flex min-h-0 flex-1">
         <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/10 bg-[#0f131a] p-3">
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-            <RemoteFileBrowser hostId={hostId} />
+            <RemoteFileBrowser hostId={hostId} onEdit={editFile} />
           </div>
         </aside>
         <main className="relative min-w-0 flex-1">
@@ -250,6 +264,17 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
             ref={containerRef}
             className="absolute inset-x-0 top-9 bottom-0 p-3"
           />
+          {editingFile && (
+            <RemoteFileEditor
+              hostId={hostId}
+              entry={editingFile}
+              onDirtyChange={setFileDirty}
+              onClose={() => {
+                setEditingFile(null)
+                setFileDirty(false)
+              }}
+            />
+          )}
         </main>
         {agentOpen && <AgentPanel hostId={hostId} />}
       </div>

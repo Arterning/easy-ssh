@@ -13,6 +13,12 @@ export type RemoteDirectory = {
   parent: string
   items: RemoteEntry[]
 }
+export type RemoteFileContent = {
+  path: string
+  content: string
+  size: number
+  modifiedAt: string
+}
 
 export const filesApi = {
   home: (hostId: number) =>
@@ -27,6 +33,15 @@ export const filesApi = {
     request<void>(`/hosts/${hostId}/files?path=${encodeURIComponent(path)}`, {
       method: "DELETE",
     }),
+  readContent: (hostId: number, path: string) =>
+    request<RemoteFileContent>(
+      `/hosts/${hostId}/files/content?path=${encodeURIComponent(path)}`
+    ),
+  saveContent: (hostId: number, path: string, content: string, expectedModifiedAt: string, force = false) =>
+    request<RemoteFileContent>(
+      `/hosts/${hostId}/files/content?path=${encodeURIComponent(path)}`,
+      { method: "PUT", body: JSON.stringify({ content, expectedModifiedAt, force }) }
+    ),
 }
 
 export function uploadRemoteFile(

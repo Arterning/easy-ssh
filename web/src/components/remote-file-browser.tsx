@@ -10,6 +10,7 @@ import {
   Filter,
   Folder,
   LoaderCircle,
+  Pencil,
   RefreshCw,
   Trash2,
   Upload,
@@ -28,7 +29,13 @@ type Transfer = {
 }
 type ContextMenu = { entry: RemoteEntry; x: number; y: number }
 
-export function RemoteFileBrowser({ hostId }: { hostId: number }) {
+export function RemoteFileBrowser({
+  hostId,
+  onEdit,
+}: {
+  hostId: number
+  onEdit?: (entry: RemoteEntry) => void
+}) {
   const [currentPath, setCurrentPath] = useState("")
   const [parent, setParent] = useState("")
   const [entries, setEntries] = useState<RemoteEntry[]>([])
@@ -416,7 +423,7 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
                 setContextMenu({
                   entry,
                   x: Math.min(event.clientX, window.innerWidth - 170),
-                  y: Math.min(event.clientY, window.innerHeight - 145),
+                  y: Math.min(event.clientY, window.innerHeight - 185),
                 })
               }}
               className={`group flex w-full items-center gap-2.5 rounded px-2 py-2 text-left text-[13px] ${selected === entry.path ? "bg-blue-500/15 text-blue-200" : "text-slate-300 hover:bg-white/[.06]"}`}
@@ -513,6 +520,16 @@ export function RemoteFileBrowser({ hostId }: { hostId: number }) {
             </button>
             {contextMenu.entry.type === "file" && (
               <>
+                <button
+                  onClick={() => {
+                    onEdit?.(contextMenu.entry)
+                    setContextMenu(null)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 hover:bg-white/10"
+                >
+                  <Pencil className="size-3.5" />
+                  编辑
+                </button>
                 <button
                   onClick={() => download(contextMenu.entry)}
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 hover:bg-white/10"
