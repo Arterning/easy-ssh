@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css"
 import {
   ArrowLeft,
   Bot,
+  FileText,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -49,17 +50,39 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
   const [error, setError] = useState("")
   const [agentOpen, setAgentOpen] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [editingFile, setEditingFile] = useState<RemoteEntry | null>(null)
-  const [fileDirty, setFileDirty] = useState(false)
+  const [openFiles, setOpenFiles] = useState<RemoteEntry[]>([])
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
+  const [dirtyFiles, setDirtyFiles] = useState<Record<string, boolean>>({})
 
   function editFile(entry: RemoteEntry) {
-    if (
-      editingFile?.path !== entry.path &&
-      fileDirty &&
-      !window.confirm("当前文件有未保存的修改，确定打开其他文件吗？")
+    if (!openFiles.some((file) => file.path === entry.path)) {
+      if (openFiles.length >= 12) {
+        window.alert("最多同时打开 12 个文件，请先关闭不需要的标签。")
+        return
+      }
+      setOpenFiles((files) => [...files, entry])
+    }
+    setActiveFilePath(entry.path)
+  }
+
+  const updateFileDirty = useCallback((path: string, dirty: boolean) => {
+    setDirtyFiles((current) =>
+      current[path] === dirty ? current : { ...current, [path]: dirty }
     )
-      return
-    setEditingFile(entry)
+  }, [])
+
+  function closeFile(path: string) {
+    if (dirtyFiles[path] && !window.confirm("文件有未保存的修改，确定关闭吗？")) return
+    const index = openFiles.findIndex((file) => file.path === path)
+    const remaining = openFiles.filter((file) => file.path !== path)
+    setOpenFiles(remaining)
+    setDirtyFiles((current) => {
+      const next = { ...current }
+      delete next[path]
+      return next
+    })
+    if (activeFilePath === path)
+      setActiveFilePath(remaining[Math.min(index, remaining.length - 1)]?.path ?? null)
   }
 
   useEffect(() => {
@@ -256,25 +279,54 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           </div>
         </aside>
         <main className="relative min-w-0 flex-1">
-          <div className="flex h-9 items-center border-b border-white/[0.07] bg-[#0e1219] px-3 text-xs text-slate-500">
-            <TerminalSquare className="mr-2 size-3.5" />
-            terminal-1<span className="ml-auto">xterm-256color</span>
+          <div className="flex h-9 items-stretch overflow-x-auto border-b border-white/[0.07] bg-[#0e1219] text-xs text-slate-500">
+            <button
+              onClick={() => {
+                setActiveFilePath(null)
+                requestAnimationFrame(() => terminalRef.current?.focus())
+              }}
+              className={`flex shrink-0 items-center border-r border-white/[0.07] px-3 hover:bg-white/[0.04] ${activeFilePath === null ? "bg-white/[0.06] text-slate-200" : ""}`}
+            >
+              <TerminalSquare className="mr-2 size-3.5" />
+              terminal-1
+            </button>
+            {openFiles.map((file) => (
+              <div
+                key={file.path}
+                onClick={() => setActiveFilePath(file.path)}
+                title={file.path}
+                className={`flex max-w-52 shrink-0 cursor-pointer items-center border-r border-white/[0.07] pl-3 hover:bg-white/[0.04] ${activeFilePath === file.path ? "bg-white/[0.06] text-slate-200" : ""}`}
+              >
+                <FileText className="mr-2 size-3.5 shrink-0 text-blue-400" />
+                <span className="min-w-0 truncate">{file.name}</span>
+                {dirtyFiles[file.path] && <span className="ml-1 text-blue-300">●</span>}
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    closeFile(file.path)
+                  }}
+                  title="关闭"
+                  className="mx-1.5 rounded p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+            {activeFilePath === null && <span className="ml-auto self-center px-3">xterm-256color</span>}
           </div>
           <div
             ref={containerRef}
-            className="absolute inset-x-0 top-9 bottom-0 p-3"
+            className={`absolute inset-x-0 top-9 bottom-0 p-3 ${activeFilePath === null ? "visible" : "invisible"}`}
           />
-          {editingFile && (
+          {openFiles.map((file) => (
             <RemoteFileEditor
+              key={file.path}
               hostId={hostId}
-              entry={editingFile}
-              onDirtyChange={setFileDirty}
-              onClose={() => {
-                setEditingFile(null)
-                setFileDirty(false)
-              }}
+              entry={file}
+              active={activeFilePath === file.path}
+              onDirtyChange={updateFileDirty}
             />
-          )}
+          ))}
         </main>
         {agentOpen && <AgentPanel hostId={hostId} />}
       </div>

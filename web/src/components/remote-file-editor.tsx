@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { FileText, LoaderCircle, Save, X } from "lucide-react"
+import { LoaderCircle, Save } from "lucide-react"
 
 import { ApiError } from "@/api/client"
 import { filesApi, type RemoteEntry } from "@/api/files"
@@ -7,13 +7,13 @@ import { filesApi, type RemoteEntry } from "@/api/files"
 export function RemoteFileEditor({
   hostId,
   entry,
-  onClose,
+  active,
   onDirtyChange,
 }: {
   hostId: number
   entry: RemoteEntry
-  onClose: () => void
-  onDirtyChange?: (dirty: boolean) => void
+  active: boolean
+  onDirtyChange?: (path: string, dirty: boolean) => void
 }) {
   const [content, setContent] = useState("")
   const [savedContent, setSavedContent] = useState("")
@@ -26,8 +26,12 @@ export function RemoteFileEditor({
   const dirty = content !== savedContent
 
   useEffect(() => {
-    onDirtyChange?.(dirty)
-  }, [dirty, onDirtyChange])
+    onDirtyChange?.(entry.path, dirty)
+  }, [dirty, entry.path, onDirtyChange])
+
+  useEffect(() => {
+    if (active && !loading) requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [active, loading])
 
   useEffect(() => {
     let active = true
@@ -41,7 +45,6 @@ export function RemoteFileEditor({
         setContent(file.content)
         setSavedContent(file.content)
         setModifiedAt(file.modifiedAt)
-        requestAnimationFrame(() => textareaRef.current?.focus())
       })
       .catch((reason: Error) => active && setError(reason.message))
       .finally(() => active && setLoading(false))
@@ -81,22 +84,13 @@ export function RemoteFileEditor({
     }
   }
 
-  function close() {
-    if (dirty && !window.confirm("文件有未保存的修改，确定关闭吗？")) return
-    onClose()
-  }
-
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-[#0b0e14]">
+    <div className={`absolute inset-x-0 top-9 bottom-0 z-10 flex-col bg-[#0b0e14] ${active ? "flex" : "hidden"}`}>
       <div className="flex h-9 shrink-0 items-center border-b border-white/[0.07] bg-[#0e1219] px-3 text-xs">
-        <FileText className="mr-2 size-3.5 text-blue-400" />
-        <span className="min-w-0 truncate text-slate-300" title={entry.path}>{entry.name}</span>
-        {dirty && <span className="ml-1 text-blue-300">●</span>}
-        <span className="ml-3 min-w-0 flex-1 truncate font-mono text-[10px] text-slate-600">{entry.path}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-slate-500" title={entry.path}>{entry.path}</span>
         <button onClick={() => void save()} disabled={!dirty || saving || loading} title="保存 (Ctrl+S)" className="rounded p-1 text-slate-400 hover:bg-white/10 disabled:opacity-30">
           {saving ? <LoaderCircle className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
         </button>
-        <button onClick={close} title="关闭" className="ml-1 rounded p-1 text-slate-400 hover:bg-white/10"><X className="size-3.5" /></button>
       </div>
       {error && (
         <div className="flex items-center gap-3 border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
