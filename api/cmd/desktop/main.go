@@ -96,6 +96,7 @@ func run() (runErr error) {
 	defer server.Close()
 	app := application.New(application.Options{
 		Name:        "EasySSH",
+		Icon:        appIcon,
 		Description: "SSH and database workspace",
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 		OnShutdown: func() {
