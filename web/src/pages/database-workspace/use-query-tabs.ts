@@ -1,3 +1,4 @@
+import { storage } from "@/lib/storage"
 import { useEffect, useRef, useState } from "react"
 import { databasesApi, type QueryResult, type SavedQuery } from "@/api/databases"
 
@@ -6,14 +7,14 @@ function newTab(name: string, sql = "") : QueryTab { return { id: globalThis.cry
 export function isDirty(tab: QueryTab) { return tab.savedId ? tab.sql !== tab.savedSQL : Boolean(tab.sql.trim()) }
 function restore(databaseId: number) {
   try {
-    const data = JSON.parse(localStorage.getItem(`easyssh.database.${databaseId}.tabs`) ?? "null")
+    const data = JSON.parse(storage.getItem(`easyssh.database.${databaseId}.tabs`) ?? "null")
     if (Array.isArray(data?.tabs) && data.tabs.length) {
       const tabs: QueryTab[] = data.tabs.filter((t: QueryTab) => typeof t.id === "string" && typeof t.name === "string" && typeof t.sql === "string").map((t: QueryTab) => ({ ...newTab(t.name, t.sql), id: t.id, savedId: typeof t.savedId === "number" ? t.savedId : undefined, savedSQL: typeof t.savedSQL === "string" ? t.savedSQL : undefined }))
       if (tabs.length) return { tabs, activeId: tabs.some(t => t.id === data.activeId) ? data.activeId as string : tabs[0].id }
     }
   } catch { /* Corrupt or unavailable storage falls back to a fresh draft. */ }
   let sql = "-- 在这里输入 SQL\nSELECT 1;"
-  try { sql = localStorage.getItem(`easyssh.database.${databaseId}.sql`) ?? sql } catch { /* Storage may be disabled. */ }
+  try { sql = storage.getItem(`easyssh.database.${databaseId}.sql`) ?? sql } catch { /* Storage may be disabled. */ }
   const tab = newTab("Query 1", sql)
   return { tabs: [tab], activeId: tab.id }
 }
@@ -34,7 +35,7 @@ export function useQueryTabs(databaseId: number) {
   }, [databaseId])
   useEffect(() => {
     try {
-      localStorage.setItem(`easyssh.database.${databaseId}.tabs`, JSON.stringify({ activeId, tabs: tabs.map(({ id, name, sql, savedId, savedSQL }) => ({ id, name, sql, savedId, savedSQL })) }))
+      storage.setItem(`easyssh.database.${databaseId}.tabs`, JSON.stringify({ activeId, tabs: tabs.map(({ id, name, sql, savedId, savedSQL }) => ({ id, name, sql, savedId, savedSQL })) }))
     } catch {
       // Surface an external storage failure; this does not derive state from props.
       // eslint-disable-next-line react-hooks/set-state-in-effect

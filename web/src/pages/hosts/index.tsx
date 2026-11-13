@@ -57,7 +57,7 @@ const inputClass =
 const labelClass = "mb-1.5 block text-sm font-medium"
 
 function openWorkspace(hostId: number) {
-  window.open(`/workspace/${hostId}`, "_blank", "noopener,noreferrer")
+  navigate(`/workspace/${hostId}`)
 }
 
 export function HostsPage() {

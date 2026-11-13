@@ -349,11 +349,7 @@ export function ServicesPage() {
                             size="icon-sm"
                             title="打开关联主机"
                             onClick={() =>
-                              window.open(
-                                `/workspace/${service.hostId}`,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
+                              navigate(`/workspace/${service.hostId}`)
                             }
                           >
                             <Server />

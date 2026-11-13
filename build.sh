@@ -12,6 +12,6 @@ pnpm run build
 
 echo "[2/2] Building EasySSH executable..."
 cd "$API_ROOT"
-go build -trimpath -ldflags="-s -w" -o "$OUTPUT" ./cmd/server
+go build -trimpath -ldflags="-s -w" -o "$OUTPUT" ./cmd/desktop
 
 echo "Built: $OUTPUT"

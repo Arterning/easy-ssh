@@ -1,3 +1,4 @@
+import { storage } from "@/lib/storage"
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 
@@ -85,7 +86,7 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [theme, setThemeState] = React.useState<Theme>(() => {
-    const storedTheme = localStorage.getItem(storageKey)
+    const storedTheme = storage.getItem(storageKey)
     if (isTheme(storedTheme)) {
       return storedTheme
     }
@@ -95,7 +96,7 @@ export function ThemeProvider({
 
   const setTheme = React.useCallback(
     (nextTheme: Theme) => {
-      localStorage.setItem(storageKey, nextTheme)
+      storage.setItem(storageKey, nextTheme)
       setThemeState(nextTheme)
     },
     [storageKey]
@@ -167,7 +168,7 @@ export function ThemeProvider({
                 ? "light"
                 : "dark"
 
-        localStorage.setItem(storageKey, nextTheme)
+        storage.setItem(storageKey, nextTheme)
         return nextTheme
       })
     }

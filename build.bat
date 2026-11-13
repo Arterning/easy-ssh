@@ -8,7 +8,17 @@ set "OUTPUT=%PROJECT_ROOT%easyssh.exe"
 
 echo [1/2] Building React application...
 pushd "%WEB_ROOT%"
-call pnpm run build
+where bun >nul 2>nul
+if errorlevel 1 (
+    call pnpm run build
+) else (
+    bun run --bun node_modules/typescript/bin/tsc -b
+    if errorlevel 1 (
+        popd
+        exit /b 1
+    )
+    bun run --bun node_modules/vite/bin/vite.js build
+)
 if errorlevel 1 (
     popd
     echo Frontend build failed.
@@ -18,7 +28,7 @@ popd
 
 echo [2/2] Building EasySSH executable...
 pushd "%API_ROOT%"
-go build -trimpath -ldflags="-s -w" -o "%OUTPUT%" ./cmd/server
+go build -trimpath -ldflags="-s -w -H windowsgui" -o "%OUTPUT%" ./cmd/desktop
 if errorlevel 1 (
     popd
     echo Backend build failed.

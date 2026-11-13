@@ -155,7 +155,10 @@ func (a *API) terminal(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-	<-done
+	select {
+	case <-done:
+	case <-r.Context().Done():
+	}
 }
 
 func (a *API) sshAuth(host model.Host) (gossh.AuthMethod, error) {
