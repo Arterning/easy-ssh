@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+﻿import { useEffect, useMemo, useState } from "react"
 import {
   Activity,
   Bot,
@@ -14,14 +14,12 @@ import {
   LayoutGrid,
   List,
   LoaderCircle,
-  Moon,
   Pencil,
   Plus,
   Search,
   Server,
   Settings,
   ShieldCheck,
-  Sun,
   TerminalSquare,
   Trash2,
   X,
@@ -29,15 +27,14 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { useTheme } from "@/components/theme-provider"
 import {
   hostsApi,
   type Host,
   type HostInput,
   type HostStatus,
 } from "@/api/hosts"
-import { settingsApi } from "@/api/settings"
 import { navigate } from "@/router/navigation"
+import { settingsApi } from "@/api/settings"
 
 type HostDraft = HostInput & { password: string; privateKey: string }
 const emptyDraft: HostDraft = {
@@ -61,7 +58,6 @@ function openWorkspace(hostId: number) {
 }
 
 export function HostsPage() {
-  const { theme, setTheme } = useTheme()
   const [hosts, setHosts] = useState<Host[]>([])
   const [pageError, setPageError] = useState("")
   const [query, setQuery] = useState("")
@@ -69,7 +65,6 @@ export function HostsPage() {
   const [groupFilter, setGroupFilter] = useState("all")
   const [view, setView] = useState<"table" | "grid">("table")
   const [editorOpen, setEditorOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [draft, setDraft] = useState<HostDraft>(emptyDraft)
   const [tagInput, setTagInput] = useState("")
@@ -221,13 +216,6 @@ export function HostsPage() {
           />
         </nav>
         <div className="mt-auto space-y-1">
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            <Settings className="size-4" />
-            设置
-          </button>
           <div className="mt-3 flex items-center gap-2 border-t px-2 pt-4">
             <div className="grid size-8 place-items-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-600">
               ES
@@ -247,18 +235,6 @@ export function HostsPage() {
             <span className="font-medium text-foreground">主机</span>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="切换主题"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              {theme === "dark" ? <Sun /> : <Moon />}
-            </Button>
-            <Button variant="outline" onClick={() => setSettingsOpen(true)}>
-              <Bot />
-              AI 设置
-            </Button>
             <Button onClick={openCreate}>
               <Plus />
               添加主机
@@ -415,7 +391,6 @@ export function HostsPage() {
           onSave={saveHost}
         />
       )}
-      {settingsOpen && <AiSettings onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
@@ -707,7 +682,7 @@ function HostEditor({
     <ModalShell
       wide
       title={editing ? "编辑主机" : "添加主机"}
-      subtitle="配置连接地址与 SSH 身份凭据。凭据保存后不会再次显示。"
+      subtitle="配置连接地址和 SSH 身份凭据。凭据保存后不会再次显示。"
       onClose={onClose}
     >
       <div className="max-h-[calc(92vh-150px)] overflow-y-auto px-6 py-5">
@@ -884,7 +859,7 @@ function SectionTitle({
   )
 }
 
-function AiSettings({ onClose }: { onClose: () => void }) {
+export function AiSettings({ onClose }: { onClose: () => void }) {
   const [showKey, setShowKey] = useState(false)
   const [provider, setProvider] = useState("OpenAI")
   const [baseUrl, setBaseUrl] = useState("https://api.openai.com/v1")

@@ -1,4 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react"
+import { Moon, Settings, Sun } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useTheme } from "@/components/theme-provider"
+import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { navigate } from "@/router/navigation"
 
 const HostsPage = lazy(() => import("@/pages/hosts"))
@@ -25,33 +29,37 @@ function PendingPage() {
 
 export function AppRouter() {
   const [path, setPath] = useState(window.location.pathname)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const { theme, setTheme } = useTheme()
   useEffect(() => {
     const handleNavigation = () => setPath(window.location.pathname)
     window.addEventListener("popstate", handleNavigation)
     return () => window.removeEventListener("popstate", handleNavigation)
   }, [])
   const Page = routes[path as keyof typeof routes]
+  let page: React.ReactNode
   if (Page)
-    return (
+    page = (
       <Suspense fallback={<PendingPage />}>
         <Page />
       </Suspense>
     )
+  else {
   const workspaceMatch = path.match(/^\/workspace\/(\d+)$/)
   if (workspaceMatch)
-    return (
+    page = (
       <Suspense fallback={<PendingPage />}>
         <WorkspacePage hostId={Number(workspaceMatch[1])} />
       </Suspense>
     )
   const databaseMatch = path.match(/^\/database\/(\d+)$/)
   if (databaseMatch)
-    return (
+    page = (
       <Suspense fallback={<PendingPage />}>
         <DatabaseWorkspacePage key={databaseMatch[1]} databaseId={Number(databaseMatch[1])} />
       </Suspense>
     )
-  return (
+  if (!page) page = (
     <main className="grid min-h-svh place-items-center text-center">
       <div>
         <h1 className="text-5xl font-semibold">404</h1>
@@ -62,4 +70,17 @@ export function AppRouter() {
       </div>
     </main>
   )
+  }
+  return <>
+    {page}
+    <div className="fixed bottom-4 left-3 z-30">
+      <Button variant="ghost" className="text-muted-foreground" onClick={() => setSettingsOpen(true)}>
+        <Settings className="size-4" />设置
+      </Button>
+    </div>
+    <Button className="fixed top-4 right-4 z-30" variant="ghost" size="icon" aria-label="切换主题" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+      {theme === "dark" ? <Sun /> : <Moon />}
+    </Button>
+    {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
+  </>
 }
