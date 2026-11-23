@@ -74,7 +74,7 @@ export function AppRouter() {
   }
   return <>
     {page}
-    {showGlobalControls && <div className="fixed top-2 right-4 z-30 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-sm backdrop-blur">
+    {showGlobalControls && <div className="fixed top-2 right-4 z-30 flex items-center gap-1">
       <Button variant="ghost" size="icon" aria-label="切换主题" title="切换主题" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
         {theme === "dark" ? <Sun /> : <Moon />}
       </Button>

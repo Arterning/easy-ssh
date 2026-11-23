@@ -45,6 +45,7 @@ type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
 
 export function WorkspacePage({ hostId }: { hostId: number }) {
   const { theme, setTheme } = useTheme()
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
@@ -146,6 +147,13 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!terminalRef.current) return
+    terminalRef.current.options.theme = isDark
+      ? { background: "#0b0e14", foreground: "#d8dee9", cursor: "#8aadf4", selectionBackground: "#334155" }
+      : { background: "#ffffff", foreground: "#1e293b", cursor: "#2563eb", selectionBackground: "#bfdbfe" }
+  }, [isDark])
+
   const connect = useCallback(() => {
     if (!host || status === "connecting" || status === "connected") return
     setStatus("connecting")
@@ -202,11 +210,11 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
   }
 
   return (
-    <div className="flex h-svh min-w-[1024px] flex-col bg-[#0b0e14] text-slate-200">
-      <header className="flex h-14 shrink-0 items-center border-b border-white/10 bg-[#11151d] px-3">
+    <div className={`flex h-svh min-w-[1024px] flex-col ${isDark ? "bg-[#0b0e14] text-slate-200" : "bg-slate-50 text-slate-900"}`}>
+      <header className={`flex h-14 shrink-0 items-center border-b px-3 ${isDark ? "border-white/10 bg-[#11151d]" : "border-slate-200 bg-white"}`}>
         <Button
           variant="ghost"
-          className="text-slate-300 hover:bg-white/10 hover:text-white"
+          className={isDark ? "text-slate-300 hover:bg-white/10 hover:text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}
           onClick={() => navigate("/hosts")}
         >
           <ArrowLeft />
@@ -229,7 +237,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           {status === "connected" ? (
             <Button
               variant="outline"
-              className="border-white/10 bg-transparent text-slate-300 hover:bg-white/10"
+              className={isDark ? "border-white/10 bg-transparent text-slate-300 hover:bg-white/10" : "border-slate-300 bg-transparent text-slate-700 hover:bg-slate-100"}
               onClick={disconnect}
             >
               <Unplug />
@@ -237,7 +245,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
             </Button>
           ) : (
             <Button
-              className="bg-blue-500 text-white hover:bg-blue-400"
+              className="bg-blue-600 text-white hover:bg-blue-500"
               onClick={connect}
               disabled={!host || status === "connecting"}
             >
@@ -252,7 +260,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           <Button
             variant="ghost"
             size="icon"
-            className="text-slate-400 hover:bg-white/10 hover:text-white"
+            className={isDark ? "text-slate-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}
             onClick={() => setAgentOpen(!agentOpen)}
           >
             {agentOpen ? <PanelRightClose /> : <PanelRightOpen />}
@@ -260,7 +268,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           <Button
             variant="ghost"
             size="icon"
-            className="text-slate-400 hover:bg-white/10 hover:text-white"
+            className={isDark ? "text-slate-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}
             aria-label="切换主题"
             title="切换主题"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -270,7 +278,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           <Button
             variant="ghost"
             size="icon"
-            className="text-slate-400 hover:bg-white/10 hover:text-white"
+            className={isDark ? "text-slate-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}
             onClick={() => setSettingsOpen(true)}
             aria-label="AI 设置"
           >
@@ -287,13 +295,13 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
         </div>
       )}
       <div className="flex min-h-0 flex-1">
-        <aside className="flex w-[300px] shrink-0 flex-col border-r border-white/10 bg-[#0f131a] p-3">
+        <aside className={`flex w-[300px] shrink-0 flex-col border-r p-3 ${isDark ? "border-white/10 bg-[#0f131a]" : "border-slate-200 bg-white"}`}>
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <RemoteFileBrowser hostId={hostId} onEdit={editFile} />
           </div>
         </aside>
         <main className="relative min-w-0 flex-1">
-          <div className="flex h-9 items-stretch overflow-x-auto border-b border-white/[0.07] bg-[#0e1219] text-xs text-slate-500">
+          <div className={`flex h-9 items-stretch overflow-x-auto border-b text-xs ${isDark ? "border-white/[0.07] bg-[#0e1219] text-slate-500" : "border-slate-200 bg-slate-100 text-slate-500"}`}>
             <button
               onClick={() => {
                 setActiveFilePath(null)
