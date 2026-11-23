@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { filesApi, uploadRemoteFile, type RemoteEntry } from "@/api/files"
+import { useTheme } from "@/components/theme-provider"
 
 type Transfer = {
   id: string
@@ -36,6 +37,8 @@ export function RemoteFileBrowser({
   hostId: number
   onEdit?: (entry: RemoteEntry) => void
 }) {
+  const { theme } = useTheme()
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
   const [currentPath, setCurrentPath] = useState("")
   const [parent, setParent] = useState("")
   const [entries, setEntries] = useState<RemoteEntry[]>([])
@@ -244,7 +247,7 @@ export function RemoteFileBrowser({
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex min-w-0 items-center gap-1 px-1">
-        <span className="min-w-0 flex-1 truncate text-xs font-semibold tracking-wider text-slate-500 uppercase">
+        <span className={`min-w-0 flex-1 truncate text-xs font-semibold tracking-wider uppercase ${isDark ? "text-slate-500" : "text-slate-700"}`}>
           远程文件
         </span>
         <button
@@ -423,7 +426,7 @@ export function RemoteFileBrowser({
                   y: Math.min(event.clientY, window.innerHeight - 185),
                 })
               }}
-              className={`group flex w-full items-center gap-2.5 rounded px-2 py-2 text-left text-[13px] ${selected === entry.path ? "bg-blue-500/15 text-blue-200" : "text-slate-300 hover:bg-white/[.06]"}`}
+            className={`group flex w-full items-center gap-2.5 rounded px-2 py-2 text-left text-[13px] ${selected === entry.path ? (isDark ? "bg-blue-500/15 text-blue-200" : "bg-blue-100 text-blue-800") : (isDark ? "text-slate-300 hover:bg-white/[.06]" : "text-slate-800 hover:bg-slate-100")}`}
             >
               {entry.type === "directory" ? (
                 <Folder className="size-4.5 shrink-0 fill-amber-400/20 text-amber-400" />

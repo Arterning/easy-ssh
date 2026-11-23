@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 const inputClass =
   "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/20"
 
-export function AISettingsDialog({ onClose }: { onClose: () => void }) {
+export function AISettingsDialog({ onClose, inline = false }: { onClose?: () => void; inline?: boolean }) {
   const [provider, setProvider] = useState("OpenAI")
   const [baseUrl, setBaseUrl] = useState("https://api.openai.com/v1")
   const [model, setModel] = useState("")
@@ -48,10 +48,10 @@ export function AISettingsDialog({ onClose }: { onClose: () => void }) {
   }
   return (
     <div
-      className="fixed inset-0 z-[70] grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+      className={inline ? "w-full" : "fixed inset-0 z-[70] grid place-items-center bg-black/60 p-4 backdrop-blur-sm"}
+      onMouseDown={(event) => !inline && event.target === event.currentTarget && onClose?.()}
     >
-      <div className="w-full max-w-lg rounded-xl border bg-background text-foreground shadow-2xl">
+      <div className={`w-full rounded-xl border bg-background text-foreground shadow-sm ${inline ? "max-w-3xl" : "max-w-lg shadow-2xl"}`}>
         <div className="flex items-start justify-between border-b px-6 py-5">
           <div>
             <h2 className="font-semibold">AI 模型设置</h2>
@@ -59,9 +59,7 @@ export function AISettingsDialog({ onClose }: { onClose: () => void }) {
               配置 OpenAI-compatible 模型服务。
             </p>
           </div>
-          <Button variant="ghost" size="icon-sm" onClick={onClose}>
-            <X />
-          </Button>
+          {!inline && <Button variant="ghost" size="icon-sm" onClick={onClose}><X /></Button>}
         </div>
         <div className="space-y-4 p-6">
           <Field label="供应商">
@@ -127,7 +125,7 @@ export function AISettingsDialog({ onClose }: { onClose: () => void }) {
                 已保存
               </span>
             )}
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" className={inline ? "hidden" : ""} onClick={onClose}>
               取消
             </Button>
             <Button

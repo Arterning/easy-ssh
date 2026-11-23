@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Bot,
   FileText,
-  Moon,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -14,9 +13,7 @@ import {
   RefreshCw,
   Send,
   Server,
-  Settings,
   ShieldCheck,
-  Sun,
   TerminalSquare,
   Unplug,
   X,
@@ -35,7 +32,6 @@ import { API_BASE } from "@/api/client"
 import type { RemoteEntry } from "@/api/files"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "@/components/theme-provider"
-import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { Markdown } from "@/components/markdown"
 import { RemoteFileBrowser } from "@/components/remote-file-browser"
 import { RemoteFileEditor } from "@/components/remote-file-editor"
@@ -44,7 +40,7 @@ import { navigate } from "@/router/navigation"
 type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
 
 export function WorkspacePage({ hostId }: { hostId: number }) {
-  const { theme, setTheme } = useTheme()
+  const { theme } = useTheme()
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -54,7 +50,6 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
   const [status, setStatus] = useState<ConnectionStatus>("idle")
   const [error, setError] = useState("")
   const [agentOpen, setAgentOpen] = useState(true)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [openFiles, setOpenFiles] = useState<RemoteEntry[]>([])
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
   const [dirtyFiles, setDirtyFiles] = useState<Record<string, boolean>>({})
@@ -265,25 +260,6 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
           >
             {agentOpen ? <PanelRightClose /> : <PanelRightOpen />}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={isDark ? "text-slate-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}
-            aria-label="切换主题"
-            title="切换主题"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            {theme === "dark" ? <Sun /> : <Moon />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={isDark ? "text-slate-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}
-            onClick={() => setSettingsOpen(true)}
-            aria-label="AI 设置"
-          >
-            <Settings />
-          </Button>
         </div>
       </header>
       {error && (
@@ -350,9 +326,8 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
             />
           ))}
         </main>
-        {agentOpen && <AgentPanel hostId={hostId} />}
+        {agentOpen && <AgentPanel hostId={hostId} dark={isDark} />}
       </div>
-      {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
@@ -373,7 +348,7 @@ function StatusPill({ status }: { status: ConnectionStatus }) {
     </span>
   )
 }
-function AgentPanel({ hostId }: { hostId: number }) {
+function AgentPanel({ hostId, dark }: { hostId: number; dark: boolean }) {
   const [items, setItems] = useState<ConversationSummary[]>([])
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [question, setQuestion] = useState("")
@@ -476,8 +451,8 @@ function AgentPanel({ hostId }: { hostId: number }) {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
   }, [conversation?.messages.length, pending.length, working])
   return (
-    <aside className="flex w-[400px] shrink-0 flex-col border-l border-white/10 bg-[#11151d]">
-      <div className="flex h-10 items-center gap-2 border-b border-white/[0.07] px-3 text-xs font-medium">
+    <aside className={`flex w-[400px] shrink-0 flex-col border-l ${dark ? "border-white/10 bg-[#11151d]" : "border-slate-200 bg-white text-slate-900"}`}>
+      <div className={`flex h-10 items-center gap-2 border-b px-3 text-xs font-medium ${dark ? "border-white/[0.07]" : "border-slate-200"}`}>
         <Bot className="size-3.5 text-violet-400" />
         <select
           value={conversation?.id ?? ""}
@@ -485,10 +460,10 @@ function AgentPanel({ hostId }: { hostId: number }) {
             void openConversation(Number(event.target.value))
           }
           disabled={working}
-          className="min-w-0 flex-1 bg-transparent text-slate-300 outline-none"
+          className={`min-w-0 flex-1 bg-transparent outline-none ${dark ? "text-slate-300" : "text-slate-800"}`}
         >
           {items.map((item) => (
-            <option key={item.id} value={item.id} className="bg-[#11151d]">
+            <option key={item.id} value={item.id} className={dark ? "bg-[#11151d]" : "bg-white text-slate-900"}>
               {item.title}
             </option>
           ))}
@@ -522,7 +497,7 @@ function AgentPanel({ hostId }: { hostId: number }) {
         ) : (
           <div className="space-y-4">
             {conversation.messages.map((message, index) => (
-              <WorkspaceMessage key={index} message={message} />
+              <WorkspaceMessage key={index} message={message} dark={dark} />
             ))}
           </div>
         )}
@@ -614,18 +589,18 @@ function AgentPanel({ hostId }: { hostId: number }) {
   )
 }
 
-function WorkspaceMessage({ message }: { message: AssistantMessage }) {
+function WorkspaceMessage({ message, dark }: { message: AssistantMessage; dark: boolean }) {
   if (message.role === "tool")
-    return <WorkspaceToolResult content={message.content ?? ""} />
+    return <WorkspaceToolResult content={message.content ?? ""} dark={dark} />
   return (
     <div
       className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
     >
       <div
-        className={`max-w-[92%] rounded-xl px-3 py-2 text-xs ${message.role === "user" ? "bg-violet-500 whitespace-pre-wrap text-white" : "border border-white/[0.08] bg-black/20 text-slate-300"}`}
+        className={`max-w-[92%] rounded-xl px-3 py-2 text-xs ${message.role === "user" ? "bg-violet-500 whitespace-pre-wrap text-white" : dark ? "border border-white/[0.08] bg-black/20 text-slate-300" : "border border-slate-200 bg-slate-50 text-slate-800"}`}
       >
         {message.role === "assistant" && message.content ? (
-          <Markdown className="[&_code]:bg-white/10 [&_pre]:bg-black/30">
+          <Markdown className={dark ? "[&_code]:bg-white/10 [&_pre]:bg-black/30" : "[&_code]:bg-slate-200 [&_pre]:bg-slate-100 [&_pre]:text-slate-800"}>
             {message.content}
           </Markdown>
         ) : (
@@ -656,7 +631,7 @@ function WorkspaceToolCall({ call }: { call: ToolCall }) {
     </div>
   )
 }
-function WorkspaceToolResult({ content }: { content: string }) {
+function WorkspaceToolResult({ content, dark }: { content: string; dark: boolean }) {
   let result: Record<string, unknown> = {}
   try {
     result = JSON.parse(content)
@@ -666,14 +641,14 @@ function WorkspaceToolResult({ content }: { content: string }) {
   if (result.status === "approval_required" || result.status === "deferred")
     return null
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
+    <div className={`rounded-lg border p-3 ${dark ? "border-white/[0.08] bg-black/20" : "border-slate-200 bg-slate-50"}`}>
       <div className="text-[10px] text-slate-500">
         执行结果 · {String(result.status ?? "unknown")}
         {result.exit_code !== undefined
           ? ` · exit ${String(result.exit_code)}`
           : ""}
       </div>
-      <pre className="mt-2 max-h-56 overflow-auto font-mono text-[10px] whitespace-pre-wrap text-slate-400">
+      <pre className={`mt-2 max-h-56 overflow-auto font-mono text-[10px] whitespace-pre-wrap ${dark ? "text-slate-400" : "text-slate-700"}`}>
         {result.stdout
           ? String(result.stdout)
           : JSON.stringify(result, null, 2)}

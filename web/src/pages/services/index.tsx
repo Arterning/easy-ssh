@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   Server,
+  Settings,
   Trash2,
   TriangleAlert,
   X,
@@ -206,6 +207,7 @@ export function ServicesPage() {
             label="数据库"
             onClick={() => navigate("/databases")}
           />
+          <Nav icon={<Settings />} label="设置" onClick={() => navigate("/settings")} />
           <Nav
             icon={<Bot />}
             label="智能助手"
@@ -220,7 +222,7 @@ export function ServicesPage() {
         </div>
       </aside>
       <main className="ml-[228px] min-h-svh flex-1">
-        <header className="flex h-16 items-center border-b bg-background/80 px-8 pr-32">
+        <header className="flex h-16 items-center border-b bg-background/80 px-8">
           <div className="text-sm text-muted-foreground">
             工作空间 <span className="mx-2">/</span>
             <span className="font-medium text-foreground">服务</span>

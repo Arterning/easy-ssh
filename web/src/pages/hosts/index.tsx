@@ -210,6 +210,11 @@ export function HostsPage() {
             onClick={() => navigate("/databases")}
           />
           <NavItem
+            icon={<Settings />}
+            label="设置"
+            onClick={() => navigate("/settings")}
+          />
+          <NavItem
             icon={<Bot />}
             label="智能助手"
             onClick={() => navigate("/assistant")}
@@ -229,7 +234,7 @@ export function HostsPage() {
         </div>
       </aside>
       <main className="ml-[228px] min-h-svh flex-1">
-        <header className="flex h-16 items-center justify-between border-b bg-background/80 px-8 pr-32 backdrop-blur">
+        <header className="flex h-16 items-center justify-between border-b bg-background/80 px-8 backdrop-blur">
           <div className="text-sm text-muted-foreground">
             工作空间 <span className="mx-2 text-border">/</span>
             <span className="font-medium text-foreground">主机</span>

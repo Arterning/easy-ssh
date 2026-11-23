@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Activity, Bot, CheckCircle2, Database, ExternalLink, LoaderCircle, Pencil, Plus, Search, Server, ShieldCheck, Trash2, X } from "lucide-react"
+import { Activity, Bot, CheckCircle2, Database, ExternalLink, LoaderCircle, Pencil, Plus, Search, Server, Settings, ShieldCheck, Trash2, X } from "lucide-react"
 import { databasesApi, type DatabaseConnection, type DatabaseInput, type DatabaseType } from "@/api/databases"
 import { hostsApi, type Host } from "@/api/hosts"
 import { Button } from "@/components/ui/button"
@@ -67,8 +67,8 @@ export function DatabasesPage() {
     catch (e) { setError((e as Error).message) }
   }
   return <div className="flex min-h-svh bg-muted/25 text-foreground">
-    <aside className="fixed inset-y-0 left-0 z-20 flex w-[228px] flex-col border-r bg-sidebar px-3 py-4"><Brand /><nav className="mt-7 space-y-1 text-sm"><Nav icon={<Server />} label="主机" onClick={() => navigate("/hosts")} /><Nav icon={<Activity />} label="服务" onClick={() => navigate("/services")} /><Nav active icon={<Database />} label="数据库" /><Nav icon={<Bot />} label="智能助手" onClick={() => navigate("/assistant")} /></nav></aside>
-    <main className="ml-[228px] min-h-svh flex-1"><header className="flex h-16 items-center border-b bg-background/80 px-8 pr-32"><div className="text-sm text-muted-foreground">工作空间 <span className="mx-2">/</span><span className="font-medium text-foreground">数据库</span></div><Button className="ml-auto" onClick={() => openEditor()}><Plus />添加数据库</Button></header>
+    <aside className="fixed inset-y-0 left-0 z-20 flex w-[228px] flex-col border-r bg-sidebar px-3 py-4"><Brand /><nav className="mt-7 space-y-1 text-sm"><Nav icon={<Server />} label="主机" onClick={() => navigate("/hosts")} /><Nav icon={<Activity />} label="服务" onClick={() => navigate("/services")} /><Nav active icon={<Database />} label="数据库" /><Nav icon={<Settings />} label="设置" onClick={() => navigate("/settings")} /><Nav icon={<Bot />} label="智能助手" onClick={() => navigate("/assistant")} /></nav></aside>
+    <main className="ml-[228px] min-h-svh flex-1"><header className="flex h-16 items-center border-b bg-background/80 px-8"><div className="text-sm text-muted-foreground">工作空间 <span className="mx-2">/</span><span className="font-medium text-foreground">数据库</span></div><Button className="ml-auto" onClick={() => openEditor()}><Plus />添加数据库</Button></header>
       <div className="mx-auto max-w-[1440px] px-8 py-7"><div className="mb-6"><h1 className="text-2xl font-semibold">数据库连接</h1><p className="mt-1 text-sm text-muted-foreground">集中管理 SQLite、MySQL 和 PostgreSQL 数据库连接。</p></div>
         {error && <div className="mb-4 flex items-center justify-between rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"><span>{error}</span><button onClick={() => setError("")}><X className="size-4" /></button></div>}
         <div className="rounded-xl border bg-card shadow-sm"><div className="flex items-center gap-2 border-b p-3"><div className="relative max-w-md min-w-72 flex-1"><Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><input className={`${inputClass} pl-9`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索名称、地址、数据库或标签..." /></div><select className={inputClass + " w-40"} value={type} onChange={(e) => setType(e.target.value as typeof type)}><option value="all">全部类型</option><option value="sqlite">SQLite</option><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option></select></div>

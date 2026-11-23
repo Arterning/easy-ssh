@@ -10,6 +10,7 @@ import {
   Plus,
   Send,
   Server,
+  Settings,
   ShieldAlert,
   TerminalSquare,
   X,
@@ -183,6 +184,7 @@ export function AssistantPage() {
             <Database className="size-4" />
             数据库
           </button>
+          <button onClick={() => navigate("/settings")} className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-muted-foreground hover:bg-sidebar-accent"><Settings className="size-4" />设置</button>
           <button className="flex h-9 w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 font-medium">
             <Bot className="size-4" />
             智能助手
@@ -220,7 +222,7 @@ export function AssistantPage() {
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center border-b bg-background/80 px-7 pr-32">
+        <header className="flex h-16 shrink-0 items-center border-b bg-background/80 px-7">
           <div>
             <div className="text-sm font-semibold">智能助手</div>
             <div className="text-xs text-muted-foreground">
