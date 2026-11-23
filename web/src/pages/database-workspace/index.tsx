@@ -76,7 +76,7 @@ export function DatabaseWorkspacePage({ databaseId }: { databaseId: number }) {
   const visibleSchemas = useMemo(() => filterSchemas(schemas, filter), [schemas, filter])
 
   return <div className="flex h-svh flex-col overflow-hidden bg-background text-foreground">
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 pr-32">
       <Button variant="ghost" size="icon-sm" title="返回数据库列表" onClick={() => navigate("/databases")}><ArrowLeft /></Button><div className="h-5 w-px bg-border" /><div className="grid size-8 place-items-center rounded-lg bg-foreground text-background"><Database className="size-4" /></div>
       <div className="min-w-0"><div className="flex items-center gap-2"><span className="truncate text-sm font-semibold">{connection?.name ?? "数据库工作台"}</span>{connection && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">{connection.type === "postgres" ? "PostgreSQL" : connection.type}</span>}</div><div className="max-w-[420px] truncate text-[11px] text-muted-foreground">{connectionAddress(connection)}</div></div>
       {connection?.useSshTunnel && <span className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground"><ShieldCheck className="size-3" />SSH 隧道</span>}

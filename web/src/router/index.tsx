@@ -73,14 +73,14 @@ export function AppRouter() {
   }
   return <>
     {page}
-    <div className="fixed bottom-4 left-3 z-30">
-      <Button variant="ghost" className="text-muted-foreground" onClick={() => setSettingsOpen(true)}>
+    <div className="fixed top-3 right-4 z-30 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-sm backdrop-blur">
+      <Button variant="ghost" size="icon" aria-label="切换主题" title="切换主题" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+        {theme === "dark" ? <Sun /> : <Moon />}
+      </Button>
+      <Button variant="ghost" className="px-2" onClick={() => setSettingsOpen(true)}>
         <Settings className="size-4" />设置
       </Button>
     </div>
-    <Button className="fixed top-4 right-4 z-30" variant="ghost" size="icon" aria-label="切换主题" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-      {theme === "dark" ? <Sun /> : <Moon />}
-    </Button>
     {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
   </>
 }

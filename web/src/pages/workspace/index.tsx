@@ -199,7 +199,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
 
   return (
     <div className="flex h-svh min-w-[1024px] flex-col bg-[#0b0e14] text-slate-200">
-      <header className="flex h-14 shrink-0 items-center border-b border-white/10 bg-[#11151d] px-3">
+      <header className="flex h-14 shrink-0 items-center border-b border-white/10 bg-[#11151d] px-3 pr-32">
         <Button
           variant="ghost"
           className="text-slate-300 hover:bg-white/10 hover:text-white"

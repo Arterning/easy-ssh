@@ -229,7 +229,7 @@ export function HostsPage() {
         </div>
       </aside>
       <main className="ml-[228px] min-h-svh flex-1">
-        <header className="flex h-16 items-center justify-between border-b bg-background/80 px-8 backdrop-blur">
+        <header className="flex h-16 items-center justify-between border-b bg-background/80 px-8 pr-32 backdrop-blur">
           <div className="text-sm text-muted-foreground">
             工作空间 <span className="mx-2 text-border">/</span>
             <span className="font-medium text-foreground">主机</span>

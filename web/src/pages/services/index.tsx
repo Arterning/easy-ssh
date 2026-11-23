@@ -220,7 +220,7 @@ export function ServicesPage() {
         </div>
       </aside>
       <main className="ml-[228px] min-h-svh flex-1">
-        <header className="flex h-16 items-center border-b bg-background/80 px-8">
+        <header className="flex h-16 items-center border-b bg-background/80 px-8 pr-32">
           <div className="text-sm text-muted-foreground">
             工作空间 <span className="mx-2">/</span>
             <span className="font-medium text-foreground">服务</span>
