@@ -37,6 +37,7 @@ export function AppRouter() {
     return () => window.removeEventListener("popstate", handleNavigation)
   }, [])
   const Page = routes[path as keyof typeof routes]
+  const showGlobalControls = !/^\/(workspace|database)\/\d+$/.test(path)
   let page: React.ReactNode
   if (Page)
     page = (
@@ -73,14 +74,14 @@ export function AppRouter() {
   }
   return <>
     {page}
-    <div className="fixed top-3 right-4 z-30 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-sm backdrop-blur">
+    {showGlobalControls && <div className="fixed top-2 right-4 z-30 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-sm backdrop-blur">
       <Button variant="ghost" size="icon" aria-label="切换主题" title="切换主题" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
         {theme === "dark" ? <Sun /> : <Moon />}
       </Button>
       <Button variant="ghost" className="px-2" onClick={() => setSettingsOpen(true)}>
         <Settings className="size-4" />设置
       </Button>
-    </div>
+    </div>}
     {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
   </>
 }

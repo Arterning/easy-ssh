@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Bot,
   FileText,
+  Moon,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -15,6 +16,7 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  Sun,
   TerminalSquare,
   Unplug,
   X,
@@ -32,6 +34,7 @@ import {
 import { API_BASE } from "@/api/client"
 import type { RemoteEntry } from "@/api/files"
 import { Button } from "@/components/ui/button"
+import { useTheme } from "@/components/theme-provider"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { Markdown } from "@/components/markdown"
 import { RemoteFileBrowser } from "@/components/remote-file-browser"
@@ -41,6 +44,7 @@ import { navigate } from "@/router/navigation"
 type ConnectionStatus = "idle" | "connecting" | "connected" | "error"
 
 export function WorkspacePage({ hostId }: { hostId: number }) {
+  const { theme, setTheme } = useTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
@@ -199,7 +203,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
 
   return (
     <div className="flex h-svh min-w-[1024px] flex-col bg-[#0b0e14] text-slate-200">
-      <header className="flex h-14 shrink-0 items-center border-b border-white/10 bg-[#11151d] px-3 pr-32">
+      <header className="flex h-14 shrink-0 items-center border-b border-white/10 bg-[#11151d] px-3">
         <Button
           variant="ghost"
           className="text-slate-300 hover:bg-white/10 hover:text-white"
@@ -252,6 +256,16 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
             onClick={() => setAgentOpen(!agentOpen)}
           >
             {agentOpen ? <PanelRightClose /> : <PanelRightOpen />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-slate-400 hover:bg-white/10 hover:text-white"
+            aria-label="切换主题"
+            title="切换主题"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun /> : <Moon />}
           </Button>
           <Button
             variant="ghost"
@@ -330,9 +344,7 @@ export function WorkspacePage({ hostId }: { hostId: number }) {
         </main>
         {agentOpen && <AgentPanel hostId={hostId} />}
       </div>
-      {settingsOpen && (
-        <AISettingsDialog onClose={() => setSettingsOpen(false)} />
-      )}
+      {settingsOpen && <AISettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
