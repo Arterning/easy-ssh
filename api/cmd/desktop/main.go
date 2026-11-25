@@ -139,6 +139,17 @@ func (s *DesktopService) OpenWorkspace(hostID int) {
 	}).Show()
 }
 
+func (s *DesktopService) OpenDatabaseWorkspace(databaseID int) {
+	if s.app == nil || databaseID <= 0 {
+		return
+	}
+	s.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title: fmt.Sprintf("EasySSH - Database %d", databaseID),
+		Width: 1440, Height: 900, MinWidth: 1000, MinHeight: 650,
+		URL: fmt.Sprintf("http://%s/database/%d", s.host, databaseID),
+	}).Show()
+}
+
 // Authenticate all transports (fetch, SSE, uploads and WebSockets) with an
 // HttpOnly session cookie. A fresh secret is generated for every launch.
 func desktopHandler(next http.Handler, host, secret string) http.Handler {

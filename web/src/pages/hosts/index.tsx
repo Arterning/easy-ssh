@@ -35,6 +35,7 @@ import {
 } from "@/api/hosts"
 import { navigate } from "@/router/navigation"
 import { settingsApi } from "@/api/settings"
+import { openWorkspace as openWorkspaceWindow } from "@/lib/open-workspace"
 
 type HostDraft = HostInput & { password: string; privateKey: string }
 const emptyDraft: HostDraft = {
@@ -54,14 +55,7 @@ const inputClass =
 const labelClass = "mb-1.5 block text-sm font-medium"
 
 function openWorkspace(hostId: number) {
-  const wailsWindow = window as Window & {
-    wails?: { Call?: { ByName: (name: string, ...args: unknown[]) => Promise<unknown> } }
-  }
-  if (wailsWindow.wails?.Call?.ByName) {
-    void wailsWindow.wails.Call.ByName("main.DesktopService.OpenWorkspace", hostId)
-    return
-  }
-  window.open(`/workspace/${hostId}`, "_blank", "noopener,noreferrer")
+  openWorkspaceWindow(`/workspace/${hostId}`, "main.DesktopService.OpenWorkspace", hostId)
 }
 
 export function HostsPage() {
