@@ -94,10 +94,12 @@ func run() (runErr error) {
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
 	defer server.Close()
+	desktop := &DesktopService{host: host}
 	app := application.New(application.Options{
 		Name:        "EasySSH",
 		Icon:        appIcon,
 		Description: "SSH and database workspace",
+		Services: []application.Service{application.NewService(desktop)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 		OnShutdown: func() {
 			cancel()
@@ -107,6 +109,7 @@ func run() (runErr error) {
 			_ = server.Close()
 		},
 	})
+	desktop.app = app
 	go func() {
 		if serveErr := server.Serve(listener); serveErr != nil && serveErr != http.ErrServerClosed {
 			log.Print(serveErr)
@@ -118,6 +121,22 @@ func run() (runErr error) {
 		URL: "http://" + host + "/desktop/start?token=" + secret,
 	})
 	return app.Run()
+}
+
+type DesktopService struct {
+	app  *application.App
+	host string
+}
+
+func (s *DesktopService) OpenWorkspace(hostID int) {
+	if s.app == nil || hostID <= 0 {
+		return
+	}
+	s.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title: fmt.Sprintf("EasySSH - Host %d", hostID),
+		Width: 1440, Height: 900, MinWidth: 1000, MinHeight: 650,
+		URL: fmt.Sprintf("http://%s/workspace/%d", s.host, hostID),
+	}).Show()
 }
 
 // Authenticate all transports (fetch, SSE, uploads and WebSockets) with an

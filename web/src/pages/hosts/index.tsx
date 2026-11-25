@@ -54,7 +54,14 @@ const inputClass =
 const labelClass = "mb-1.5 block text-sm font-medium"
 
 function openWorkspace(hostId: number) {
-  navigate(`/workspace/${hostId}`)
+  const wailsWindow = window as Window & {
+    wails?: { Call?: { ByName: (name: string, ...args: unknown[]) => Promise<unknown> } }
+  }
+  if (wailsWindow.wails?.Call?.ByName) {
+    void wailsWindow.wails.Call.ByName("main.DesktopService.OpenWorkspace", hostId)
+    return
+  }
+  window.open(`/workspace/${hostId}`, "_blank", "noopener,noreferrer")
 }
 
 export function HostsPage() {
