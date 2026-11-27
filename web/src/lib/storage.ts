@@ -1,13 +1,19 @@
 let desktopValues: Record<string, string> | null = null
 let pending = Promise.resolve()
 
-export async function initializeStorage() {
+export async function initializeStorage(): Promise<boolean> {
   try {
     const response = await fetch("/desktop/preferences")
     if (response.ok && response.headers.get("Content-Type")?.includes("application/json")) {
       desktopValues = await response.json() as Record<string, string>
+      return true
     }
   } catch { /* Browser development continues to use localStorage. */ }
+  return false
+}
+
+export function isDesktopApp() {
+  return desktopValues !== null
 }
 
 export const storage = {

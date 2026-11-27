@@ -55,7 +55,7 @@ const inputClass =
 const labelClass = "mb-1.5 block text-sm font-medium"
 
 function openWorkspace(hostId: number) {
-  openWorkspaceWindow(`/workspace/${hostId}`, "main.DesktopService.OpenWorkspace", hostId)
+  openWorkspaceWindow(`/workspace/${hostId}`, hostId)
 }
 
 export function HostsPage() {

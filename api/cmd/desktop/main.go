@@ -9,6 +9,7 @@ import (
 	"easyssh/api/internal/httpapi"
 	"easyssh/api/internal/model"
 	"easyssh/api/internal/webui"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -72,12 +73,15 @@ func run() (runErr error) {
 	if err != nil {
 		return err
 	}
+	host := listener.Addr().String()
+	desktop := &DesktopService{host: host}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	api := httpapi.New(db, vault)
 	api.StartServiceMonitor(ctx)
 	router := http.NewServeMux()
 	router.Handle("/desktop/preferences", preferencesHandler(cfg.DataDir))
+	router.HandleFunc("/desktop/open-workspace", desktop.openWorkspaceHandler)
 	router.Handle("/api/", api.Handler())
 	router.Handle("/", webui.Handler())
 	token := make([]byte, 32)
@@ -86,7 +90,6 @@ func run() (runErr error) {
 		return err
 	}
 	secret := fmt.Sprintf("%x", token)
-	host := listener.Addr().String()
 	log.Printf("EasySSH desktop listening on http://%s", host)
 	server := &http.Server{
 		Handler:           desktopHandler(router, host, secret),
@@ -94,12 +97,11 @@ func run() (runErr error) {
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
 	defer server.Close()
-	desktop := &DesktopService{host: host}
 	app := application.New(application.Options{
 		Name:        "EasySSH",
 		Icon:        appIcon,
 		Description: "SSH and database workspace",
-		Services: []application.Service{application.NewService(desktop)},
+		Services:    []application.Service{application.NewService(desktop)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 		OnShutdown: func() {
 			cancel()
@@ -126,6 +128,35 @@ func run() (runErr error) {
 type DesktopService struct {
 	app  *application.App
 	host string
+}
+
+func (s *DesktopService) openWorkspaceHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var request struct {
+		Type string `json:"type"`
+		ID   int    `json:"id"`
+	}
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&request) != nil || request.ID <= 0 {
+		http.Error(w, "invalid workspace request", http.StatusBadRequest)
+		return
+	}
+	if s.app == nil {
+		http.Error(w, "desktop is not ready", http.StatusServiceUnavailable)
+		return
+	}
+	switch request.Type {
+	case "host":
+		s.OpenWorkspace(request.ID)
+	case "database":
+		s.OpenDatabaseWorkspace(request.ID)
+	default:
+		http.Error(w, "invalid workspace type", http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *DesktopService) OpenWorkspace(hostID int) {
