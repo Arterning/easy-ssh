@@ -130,11 +130,25 @@ function parseParams(rawUrl: string): Row[] {
 }
 
 function shellTokens(input: string): string[] {
-  const tokens: string[] = []; let token = "", quote = "", escaping = false, started = false
-  for (const char of input.trim()) {
-    if (escaping) { token += char; escaping = false; started = true; continue }
+  const tokens: string[] = []
+  const chars = [...input.trim()]
+  let token = "", quote = "", escaping = false, started = false, ansiQuote = false
+  for (let index = 0; index < chars.length; index++) {
+    const char = chars[index]
+    if (escaping) {
+      token += ansiQuote ? ({ n: "\n", r: "\r", t: "\t" }[char] ?? char) : char
+      escaping = false; started = true; continue
+    }
+    if (!quote && char === "$" && chars[index + 1] === "'") {
+      quote = "'"; ansiQuote = true; started = true; index++; continue
+    }
+    if (ansiQuote && char === "\\") { escaping = true; started = true; continue }
     if (char === "\\" && quote !== "'") { escaping = true; started = true; continue }
-    if (quote) { if (char === quote) quote = ""; else token += char; started = true; continue }
+    if (quote) {
+      if (char === quote) { quote = ""; ansiQuote = false }
+      else token += char
+      started = true; continue
+    }
     if (char === "'" || char === '"') { quote = char; started = true; continue }
     if (/\s/.test(char)) { if (started) { tokens.push(token); token = ""; started = false }; continue }
     token += char; started = true
