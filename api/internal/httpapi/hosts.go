@@ -58,6 +58,7 @@ type hostView struct {
 func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	mux.HandleFunc("POST /api/v1/debugger/send", a.sendDebugRequest)
 	mux.HandleFunc("GET /api/v1/hosts", a.listHosts)
 	mux.HandleFunc("POST /api/v1/hosts", a.createHost)
 	mux.HandleFunc("GET /api/v1/hosts/{id}", a.getHost)

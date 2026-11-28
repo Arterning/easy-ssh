@@ -8,6 +8,7 @@ const ServicesPage = lazy(() => import("@/pages/services"))
 const DatabasesPage = lazy(() => import("@/pages/databases"))
 const DatabaseWorkspacePage = lazy(() => import("@/pages/database-workspace"))
 const SettingsPage = lazy(() => import("@/pages/settings"))
+const ApiDebuggerPage = lazy(() => import("@/pages/api-debugger"))
 const routes = {
   "/": HostsPage,
   "/hosts": HostsPage,
@@ -15,6 +16,7 @@ const routes = {
   "/databases": DatabasesPage,
   "/assistant": AssistantPage,
   "/settings": SettingsPage,
+  "/api-debugger": ApiDebuggerPage,
 }
 
 function PendingPage() {

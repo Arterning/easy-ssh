@@ -1,4 +1,4 @@
-import { Activity, Bot, Database, Moon, Server, Settings as SettingsIcon, Sun, Laptop } from "lucide-react"
+import { Activity, Bot, Database, Moon, Network, Server, Settings as SettingsIcon, Sun, Laptop } from "lucide-react"
 import { AISettingsDialog } from "@/components/ai-settings-dialog"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
@@ -18,8 +18,9 @@ export function SettingsPage() {
           <NavItem icon={<Server />} label="主机" path="/hosts" />
           <NavItem icon={<Activity />} label="服务" path="/services" />
           <NavItem icon={<Database />} label="数据库" path="/databases" />
-          <NavItem icon={<SettingsIcon />} label="设置" active />
+          <NavItem icon={<Network />} label="接口调试" path="/api-debugger" />
           <NavItem icon={<Bot />} label="智能助手" path="/assistant" />
+          <NavItem icon={<SettingsIcon />} label="设置" active />
         </nav>
       </aside>
       <main className="ml-[228px] min-h-svh flex-1">

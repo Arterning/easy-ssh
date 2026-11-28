@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   List,
   LoaderCircle,
+  Network,
   Pencil,
   Plus,
   Search,
@@ -210,16 +211,13 @@ export function HostsPage() {
             label="数据库"
             onClick={() => navigate("/databases")}
           />
-          <NavItem
-            icon={<Settings />}
-            label="设置"
-            onClick={() => navigate("/settings")}
-          />
+          <NavItem icon={<Network />} label="接口调试" onClick={() => navigate("/api-debugger")} />
           <NavItem
             icon={<Bot />}
             label="智能助手"
             onClick={() => navigate("/assistant")}
           />
+          <NavItem icon={<Settings />} label="设置" onClick={() => navigate("/settings")} />
         </nav>
         <div className="mt-auto space-y-1">
           <div className="mt-3 flex items-center gap-2 border-t px-2 pt-4">

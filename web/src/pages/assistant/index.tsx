@@ -7,6 +7,7 @@ import {
   Database,
   LoaderCircle,
   MessageSquare,
+  Network,
   Plus,
   Send,
   Server,
@@ -184,11 +185,12 @@ export function AssistantPage() {
             <Database className="size-4" />
             数据库
           </button>
-          <button onClick={() => navigate("/settings")} className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-muted-foreground hover:bg-sidebar-accent"><Settings className="size-4" />设置</button>
+          <button onClick={() => navigate("/api-debugger")} className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-muted-foreground hover:bg-sidebar-accent"><Network className="size-4" />接口调试</button>
           <button className="flex h-9 w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 font-medium">
             <Bot className="size-4" />
             智能助手
           </button>
+          <button onClick={() => navigate("/settings")} className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-muted-foreground hover:bg-sidebar-accent"><Settings className="size-4" />设置</button>
         </nav>
         <div className="mt-7 flex items-center justify-between px-2">
           <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">

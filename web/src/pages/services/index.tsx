@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Gauge,
   LoaderCircle,
+  Network,
   Pencil,
   Plus,
   RefreshCw,
@@ -207,12 +208,13 @@ export function ServicesPage() {
             label="数据库"
             onClick={() => navigate("/databases")}
           />
-          <Nav icon={<Settings />} label="设置" onClick={() => navigate("/settings")} />
+          <Nav icon={<Network />} label="接口调试" onClick={() => navigate("/api-debugger")} />
           <Nav
             icon={<Bot />}
             label="智能助手"
             onClick={() => navigate("/assistant")}
           />
+          <Nav icon={<Settings />} label="设置" onClick={() => navigate("/settings")} />
         </nav>
         <div className="mt-auto px-3 py-3 text-[11px] text-muted-foreground">
           <span
